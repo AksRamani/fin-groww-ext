@@ -60,33 +60,44 @@
       transform: translateY(100%) !important;
     }
 
-    /* Floating Restore Button when Minimized */
+    /* Floating Restore Button when Minimized (Draggable anywhere on screen) */
     #fg-ide-restore-btn {
       position: fixed !important;
-      bottom: 12px !important;
-      right: 18px !important;
+      bottom: 12px;
+      right: 18px;
       background: #161b22 !important;
       border: 1px solid #38bdf8 !important;
       color: #38bdf8 !important;
       border-radius: 20px !important;
-      padding: 5px 14px !important;
+      padding: 5px 12px !important;
       font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace !important;
       font-size: 11px !important;
       font-weight: 700 !important;
       display: none;
       align-items: center !important;
-      gap: 7px !important;
-      cursor: pointer !important;
+      gap: 6px !important;
+      cursor: grab !important;
+      user-select: none !important;
+      -webkit-user-select: none !important;
       z-index: 2147483647 !important;
       pointer-events: auto !important;
       box-shadow: 0 4px 16px rgba(0, 0, 0, 0.7), 0 0 10px rgba(56, 189, 248, 0.3) !important;
-      transition: all 0.2s ease !important;
+      transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease !important;
+      touch-action: none !important;
     }
 
     #fg-ide-restore-btn:hover {
-      background: #38bdf8 !important;
-      color: #0d1117 !important;
-      transform: translateY(-2px) !important;
+      background: #1c2128 !important;
+      border-color: #58a6ff !important;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.8), 0 0 14px rgba(56, 189, 248, 0.45) !important;
+    }
+
+    #fg-ide-restore-btn.fg-dragging {
+      cursor: grabbing !important;
+      opacity: 0.95 !important;
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.9), 0 0 18px rgba(56, 189, 248, 0.6) !important;
+      transform: scale(1.05) !important;
+      transition: none !important;
     }
 
     /* Left Group: Profile selector, Overall P&L, Running Rank */
@@ -830,11 +841,28 @@
     `;
     shadowRoot.appendChild(bar);
 
-    // 6. Floating Restore Badge
+    // 6. Floating Restore Badge (Draggable anywhere in the tab)
     const restoreBtn = document.createElement("button");
     restoreBtn.id = "fg-ide-restore-btn";
-    restoreBtn.innerHTML = `<span>(Alt+S)</span> <span id="fg-restore-pnl" style="font-size:11px;font-weight:800;">P&L: ₹0</span> <span>▲</span>`;
-    restoreBtn.title = "Restore Status Bar (Alt+S)";
+    restoreBtn.innerHTML = `<span style="opacity:0.6;font-size:10px;cursor:grab;" title="Drag to move">⠿</span> <span>(Alt+S)</span> <span id="fg-restore-pnl" style="font-size:11px;font-weight:800;">P&L: ₹0</span> <span>▲</span>`;
+    restoreBtn.title = "Drag to move • Click or press Alt+S to restore status bar";
+
+    // Restore saved position if present
+    try {
+      const rawPos = localStorage.getItem("fg_pill_pos");
+      if (rawPos) {
+        const pos = JSON.parse(rawPos);
+        if (typeof pos.left === "number" && typeof pos.top === "number") {
+          const maxLeft = Math.max(8, window.innerWidth - 180);
+          const maxTop = Math.max(8, window.innerHeight - 40);
+          restoreBtn.style.left = `${Math.max(8, Math.min(maxLeft, pos.left))}px`;
+          restoreBtn.style.top = `${Math.max(8, Math.min(maxTop, pos.top))}px`;
+          restoreBtn.style.bottom = "auto";
+          restoreBtn.style.right = "auto";
+        }
+      }
+    } catch (e) {}
+
     if (isInitiallyMinimized) {
       restoreBtn.style.display = "inline-flex";
     }
@@ -945,8 +973,95 @@
       }
     });
 
-    // Restore Button: Restores the status bar and hides the small pill
-    restoreBtn.addEventListener("click", () => {
+    // Draggable logic for the minimized restore pill
+    const setupDraggablePill = (pill, onRestoreClick) => {
+      let isDragging = false;
+      let hasMoved = false;
+      let startX = 0;
+      let startY = 0;
+      let initialLeft = 0;
+      let initialTop = 0;
+
+      const onPointerDown = (e) => {
+        if (e.button !== undefined && e.button !== 0) return;
+        isDragging = true;
+        hasMoved = false;
+        startX = e.clientX;
+        startY = e.clientY;
+
+        const rect = pill.getBoundingClientRect();
+        initialLeft = rect.left;
+        initialTop = rect.top;
+
+        pill.classList.add("fg-dragging");
+
+        window.addEventListener("pointermove", onPointerMove);
+        window.addEventListener("pointerup", onPointerUp);
+      };
+
+      const onPointerMove = (e) => {
+        if (!isDragging) return;
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+
+        if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+          hasMoved = true;
+        }
+
+        let newLeft = initialLeft + dx;
+        let newTop = initialTop + dy;
+
+        const pillWidth = pill.offsetWidth || 160;
+        const pillHeight = pill.offsetHeight || 32;
+        const maxLeft = window.innerWidth - pillWidth - 8;
+        const maxTop = window.innerHeight - pillHeight - 8;
+
+        newLeft = Math.max(8, Math.min(maxLeft, newLeft));
+        newTop = Math.max(8, Math.min(maxTop, newTop));
+
+        pill.style.left = `${newLeft}px`;
+        pill.style.top = `${newTop}px`;
+        pill.style.bottom = "auto";
+        pill.style.right = "auto";
+      };
+
+      const onPointerUp = () => {
+        if (!isDragging) return;
+        isDragging = false;
+        pill.classList.remove("fg-dragging");
+
+        window.removeEventListener("pointermove", onPointerMove);
+        window.removeEventListener("pointerup", onPointerUp);
+
+        if (hasMoved) {
+          const rect = pill.getBoundingClientRect();
+          const pos = { left: Math.round(rect.left), top: Math.round(rect.top) };
+          try {
+            localStorage.setItem("fg_pill_pos", JSON.stringify(pos));
+          } catch (err) {}
+          chrome.storage.local.set({ fg_pill_pos: pos });
+        } else {
+          onRestoreClick();
+        }
+      };
+
+      pill.addEventListener("pointerdown", onPointerDown);
+
+      window.addEventListener("resize", () => {
+        const rect = pill.getBoundingClientRect();
+        if (rect.left > 0 || rect.top > 0) {
+          const maxLeft = Math.max(8, window.innerWidth - (pill.offsetWidth || 160) - 8);
+          const maxTop = Math.max(8, window.innerHeight - (pill.offsetHeight || 32) - 8);
+          if (rect.left > maxLeft || rect.top > maxTop) {
+            pill.style.left = `${Math.min(rect.left, maxLeft)}px`;
+            pill.style.top = `${Math.min(rect.top, maxTop)}px`;
+          }
+        }
+      });
+    };
+
+    // Restore Button: Drag to move anywhere in tab, click to restore
+    setupDraggablePill(restoreBtn, () => {
       setMinimizedState(false);
     });
 
@@ -1361,6 +1476,21 @@
   // Real-time synchronization listener: listens to background sync on ALL tabs
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === "local") {
+      if (changes.fg_pill_pos && changes.fg_pill_pos.newValue) {
+        const pos = changes.fg_pill_pos.newValue;
+        const restoreBtn = shadowRoot?.getElementById("fg-ide-restore-btn");
+        if (restoreBtn && typeof pos.left === "number" && typeof pos.top === "number") {
+          const maxLeft = Math.max(8, window.innerWidth - 180);
+          const maxTop = Math.max(8, window.innerHeight - 40);
+          restoreBtn.style.left = `${Math.max(8, Math.min(maxLeft, pos.left))}px`;
+          restoreBtn.style.top = `${Math.max(8, Math.min(maxTop, pos.top))}px`;
+          restoreBtn.style.bottom = "auto";
+          restoreBtn.style.right = "auto";
+          try {
+            localStorage.setItem("fg_pill_pos", JSON.stringify(pos));
+          } catch (e) {}
+        }
+      }
       if (changes.fg_is_minimized !== undefined) {
         const isMin = changes.fg_is_minimized.newValue === true;
         const bar = shadowRoot?.getElementById("fg-ide-statusbar");
@@ -1440,7 +1570,19 @@
     }
 
     try {
-      const stored = await chrome.storage.local.get(["fg_latest_data", "fg_selected_profile", "fg_is_minimized"]);
+      const stored = await chrome.storage.local.get(["fg_latest_data", "fg_selected_profile", "fg_is_minimized", "fg_pill_pos"]);
+      if (stored.fg_pill_pos && typeof stored.fg_pill_pos.left === "number" && typeof stored.fg_pill_pos.top === "number") {
+        const restoreBtn = shadowRoot?.getElementById("fg-ide-restore-btn");
+        if (restoreBtn) {
+          const maxLeft = Math.max(8, window.innerWidth - 180);
+          const maxTop = Math.max(8, window.innerHeight - 40);
+          restoreBtn.style.left = `${Math.max(8, Math.min(maxLeft, stored.fg_pill_pos.left))}px`;
+          restoreBtn.style.top = `${Math.max(8, Math.min(maxTop, stored.fg_pill_pos.top))}px`;
+          restoreBtn.style.bottom = "auto";
+          restoreBtn.style.right = "auto";
+        }
+      }
+
       if (stored.fg_is_minimized !== undefined) {
         const isMin = stored.fg_is_minimized === true;
         const bar = shadowRoot?.getElementById("fg-ide-statusbar");
