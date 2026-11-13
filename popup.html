@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FinGroww Paper Trading Monitor</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <!-- Header -->
+  <header class="app-header">
+    <div class="brand">
+      <div class="brand-logo">⚡</div>
+      <div class="brand-meta">
+        <h1 class="brand-title">FinGroww Trading</h1>
+        <span class="brand-sub">IDE Position & Rank Monitor</span>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button id="btnRefresh" class="icon-btn" title="Refresh Live Data">
+        <span id="refreshIcon">↻</span>
+      </button>
+      <a href="https://fingroww.tech/ai-auto-paper-trading.html" target="_blank" class="icon-btn" title="Open FinGroww Web Page">
+        ↗
+      </a>
+    </div>
+  </header>
+
+  <!-- Profile Switcher & Rank Banner -->
+  <section class="profile-card">
+    <div class="profile-select-row">
+      <label for="selProfile" class="label-xs">SELECT TRADER PROFILE</label>
+      <select id="selProfile" class="profile-select">
+        <option value="">Loading profiles...</option>
+      </select>
+    </div>
+
+    <!-- Rank & Status Row -->
+    <div class="rank-status-row">
+      <div id="rankBadge" class="rank-badge">
+        <span class="rank-icon">🏆</span>
+        <span id="rankVal">Rank --/--</span>
+      </div>
+
+      <div id="engineStatusBadge" class="status-badge status-idle">
+        <span class="status-dot"></span>
+        <span id="engineStatusText">IDLE</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- KPI Overview (Total P&L + Equity) -->
+  <section class="kpi-grid">
+    <div class="kpi-card pnl-card">
+      <div class="kpi-lbl">Overall Profit & Loss</div>
+      <div class="kpi-val" id="totalPnl">₹0.00</div>
+      <div class="kpi-sub" id="returnPct">0.00% Return</div>
+    </div>
+
+    <div class="kpi-card">
+      <div class="kpi-lbl">Virtual Equity</div>
+      <div class="kpi-val val-blue" id="accountEquity">₹1,00,000</div>
+      <div class="kpi-sub" id="availableBal">Balance: ₹1,00,000</div>
+    </div>
+  </section>
+
+  <!-- Open Positions Section -->
+  <section class="positions-section">
+    <div class="section-header">
+      <div class="section-title">
+        <span>ACTIVE OPEN POSITIONS</span>
+        <span id="posCountBadge" class="count-pill">0</span>
+      </div>
+      <div class="live-indicator">
+        <span class="live-dot"></span>
+        <span id="lastUpdatedTime">Syncing...</span>
+      </div>
+    </div>
+
+    <div id="positionsList" class="positions-list">
+      <div class="empty-state">
+        <div class="empty-icon">📊</div>
+        <div class="empty-text">Loading open positions...</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="app-footer">
+    <span class="footer-sync-info" id="syncStatus">Auto-syncing every 5s</span>
+    <button id="btnOpenLeaderboard" class="link-btn">Leaderboard</button>
+  </footer>
+
+  <script src="popup.js"></script>
+</body>
+</html>
+

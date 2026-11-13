@@ -1,0 +1,46 @@
+{
+  "manifest_version": 3,
+  "name": "FinGroww IDE Status Bar & Paper Trading Monitor",
+  "version": "1.1.0",
+  "description": "IDE status bar on ALL browser tabs showing live open positions, current price (LTP), overall P&L, and leaderboard rank in real time.",
+  "permissions": [
+    "storage",
+    "alarms"
+  ],
+  "host_permissions": [
+    "<all_urls>",
+    "http://*/*",
+    "https://*/*",
+    "https://fingroww-trading.onrender.com/*",
+    "http://127.0.0.1:8787/*",
+    "http://localhost:8787/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    },
+    "default_title": "FinGroww Paper Trading Monitor"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>",
+        "http://*/*",
+        "https://*/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_end"
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}
