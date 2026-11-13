@@ -199,18 +199,58 @@ function renderPositionsList(positions, flashMap) {
   });
 }
 
+// Check Indian Market Hours (IST 9:00 AM - 3:30 PM, Mon-Fri)
+function updateMarketStatusIndicator(isOpenFromServer) {
+  const descEl = document.getElementById("marketStatusDesc");
+  const textEl = document.getElementById("marketStatusText");
+  if (!descEl || !textEl) return;
+
+  let isOpen = false;
+  if (typeof isOpenFromServer === "boolean") {
+    isOpen = isOpenFromServer;
+  } else {
+    const now = new Date();
+    const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+    const ist = new Date(utc + (3600000 * 5.5));
+    const day = ist.getDay();
+    const totalMins = ist.getHours() * 60 + ist.getMinutes();
+    isOpen = (day >= 1 && day <= 5) && (totalMins >= 540 && totalMins < 930);
+  }
+
+  if (isOpen) {
+    descEl.className = "setting-desc market-open";
+    textEl.textContent = "Market Open (Closes 3:30 PM IST)";
+  } else {
+    descEl.className = "setting-desc market-closed";
+    textEl.textContent = "Market Closed (Opens 9:00 AM Mon-Fri)";
+  }
+}
+
 // Event Listeners & Boot
 document.addEventListener("DOMContentLoaded", async () => {
   // Read stored data first for instant render
   try {
-    const stored = await chrome.storage.local.get(["fg_latest_data", "fg_selected_profile"]);
+    const stored = await chrome.storage.local.get(["fg_latest_data", "fg_selected_profile", "fg_show_after_hours"]);
     if (stored && stored.fg_selected_profile) {
       currentProfile = stored.fg_selected_profile;
     }
     if (stored && stored.fg_latest_data) {
       updatePopupUi(stored.fg_latest_data);
+      if (typeof stored.fg_latest_data.is_market_open === "boolean") {
+        updateMarketStatusIndicator(stored.fg_latest_data.is_market_open);
+      }
+    }
+
+    const toggleShow = document.getElementById("toggleShowAfterHours");
+    if (toggleShow) {
+      toggleShow.checked = stored?.fg_show_after_hours === true;
+      toggleShow.addEventListener("change", (e) => {
+        chrome.storage.local.set({ fg_show_after_hours: e.target.checked });
+      });
     }
   } catch (e) {}
+
+  updateMarketStatusIndicator();
 
   // Request fresh sync from background
   chrome.runtime.sendMessage({ type: "FORCE_REFRESH" });
@@ -218,11 +258,18 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Listen for real-time background sync updates
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === "local") {
+      if (changes.fg_show_after_hours !== undefined) {
+        const toggleShow = document.getElementById("toggleShowAfterHours");
+        if (toggleShow) toggleShow.checked = changes.fg_show_after_hours.newValue === true;
+      }
       if (changes.fg_selected_profile) {
         currentProfile = changes.fg_selected_profile.newValue || currentProfile;
       }
       if (changes.fg_latest_data) {
         updatePopupUi(changes.fg_latest_data.newValue);
+        if (typeof changes.fg_latest_data.newValue?.is_market_open === "boolean") {
+          updateMarketStatusIndicator(changes.fg_latest_data.newValue.is_market_open);
+        }
       }
     }
   });

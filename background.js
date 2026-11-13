@@ -50,6 +50,17 @@ async function apiFetch(path, options = {}, timeoutMs = 12000) {
   return null;
 }
 
+// Calculate Indian market hours locally (IST: Mon-Fri 9:00 AM - 3:30 PM)
+function isIndianMarketOpenNow() {
+  const now = new Date();
+  const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+  const ist = new Date(utc + (3600000 * 5.5));
+  const day = ist.getDay();
+  if (day === 0 || day === 6) return false;
+  const totalMins = ist.getHours() * 60 + ist.getMinutes();
+  return totalMins >= 540 && totalMins < 930;
+}
+
 // Master Fast Sync Routine: polls state, running leaderboard, and profiles list
 async function performMasterSync() {
   if (isSyncing) return;
@@ -67,12 +78,18 @@ async function performMasterSync() {
 
     const previousData = stored?.fg_latest_data;
 
-    // 2. Fetch Profiles, Running Leaderboard, and Session State concurrently
-    const [profilesData, leaderboardData, sessionData] = await Promise.all([
+    // 2. Fetch Profiles, Running Leaderboard, Session State, and Market Status concurrently
+    const [profilesData, leaderboardData, sessionData, marketData] = await Promise.all([
       apiFetch("/api/paper/profiles", {}, 10000),
       apiFetch("/api/paper/leaderboard?active_only=true", {}, 10000),
-      apiFetch(`/api/paper/session/state?user=${encodeURIComponent(currentProfile)}`, {}, 14000)
+      apiFetch(`/api/paper/session/state?user=${encodeURIComponent(currentProfile)}`, {}, 14000),
+      apiFetch("/api/paper/market-status", {}, 8000)
     ]);
+
+    let isMarketOpen = isIndianMarketOpenNow();
+    if (marketData && typeof marketData.is_trading_hours === "boolean") {
+      isMarketOpen = marketData.is_trading_hours;
+    }
 
     // Handle profiles array: retain older list if current fetch returned null/empty
     let profilesList = [];
@@ -146,6 +163,7 @@ async function performMasterSync() {
         status: engineStatus,
         leaderboard: leaderboard,
         profiles: profilesList,
+        is_market_open: isMarketOpen,
         timestamp: Date.now()
       }
     };
@@ -165,6 +183,10 @@ async function performMasterSync() {
 // Background Live Tick: Triggers NSE live mark-to-market re-calculation on backend
 async function triggerLiveMarketTick() {
   if (isTicking) return;
+  // If Indian market is closed, skip heavy live quotes tick
+  if (!isIndianMarketOpenNow()) {
+    return;
+  }
   isTicking = true;
   try {
     const tickResult = await apiFetch("/api/paper/session/tick", {

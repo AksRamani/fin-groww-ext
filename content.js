@@ -671,6 +671,32 @@
   let isDrawerOpen = false;
   let shadowRoot = null;
   let hostEl = null;
+  let showAfterHours = false;
+  let serverMarketOpen = null;
+
+  // Indian Market Hours (IST: Mon-Fri 9:00 AM - 3:30 PM)
+  function isIndianMarketOpenNow() {
+    const now = new Date();
+    const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+    const ist = new Date(utc + (3600000 * 5.5));
+    const day = ist.getDay();
+    if (day === 0 || day === 6) return false;
+    const totalMins = ist.getHours() * 60 + ist.getMinutes();
+    return totalMins >= 540 && totalMins < 930;
+  }
+
+  // Update visibility: hides both status bar & pill when Indian market is closed unless user enabled showAfterHours
+  function updateMarketVisibility() {
+    if (!hostEl) return;
+    const isMarketOpen = serverMarketOpen !== null ? serverMarketOpen : isIndianMarketOpenNow();
+    const shouldDisplay = isMarketOpen || showAfterHours;
+
+    if (!shouldDisplay) {
+      hostEl.style.setProperty("display", "none", "important");
+    } else {
+      hostEl.style.removeProperty("display");
+    }
+  }
 
   // Format INR Currency
   function formatInr(val) {
@@ -877,6 +903,8 @@
     } else if (!document.body && document.documentElement && hostEl.parentElement !== document.documentElement) {
       document.documentElement.appendChild(hostEl);
     }
+
+    updateMarketVisibility();
   }
 
   function setupEventListeners(bar, drawer, restoreBtn) {
@@ -1511,11 +1539,19 @@
           localStorage.setItem("fg_is_minimized", isMin ? "true" : "false");
         } catch (e) {}
       }
+      if (changes.fg_show_after_hours !== undefined) {
+        showAfterHours = changes.fg_show_after_hours.newValue === true;
+        updateMarketVisibility();
+      }
       if (changes.fg_selected_profile) {
         currentProfile = changes.fg_selected_profile.newValue || currentProfile;
         renderProfileSelectors();
       }
       if (changes.fg_latest_data) {
+        if (typeof changes.fg_latest_data.newValue?.is_market_open === "boolean") {
+          serverMarketOpen = changes.fg_latest_data.newValue.is_market_open;
+          updateMarketVisibility();
+        }
         applyLatestData(changes.fg_latest_data.newValue);
       }
     }
@@ -1569,8 +1605,19 @@
       observer.observe(document.body, { childList: true });
     }
 
+    // Periodically re-check Indian market hours visibility (at 3:30 PM & 9:00 AM)
+    setInterval(updateMarketVisibility, 15000);
+
     try {
-      const stored = await chrome.storage.local.get(["fg_latest_data", "fg_selected_profile", "fg_is_minimized", "fg_pill_pos"]);
+      const stored = await chrome.storage.local.get(["fg_latest_data", "fg_selected_profile", "fg_is_minimized", "fg_pill_pos", "fg_show_after_hours"]);
+      if (stored.fg_show_after_hours !== undefined) {
+        showAfterHours = stored.fg_show_after_hours === true;
+      }
+      if (typeof stored.fg_latest_data?.is_market_open === "boolean") {
+        serverMarketOpen = stored.fg_latest_data.is_market_open;
+      }
+      updateMarketVisibility();
+
       if (stored.fg_pill_pos && typeof stored.fg_pill_pos.left === "number" && typeof stored.fg_pill_pos.top === "number") {
         const restoreBtn = shadowRoot?.getElementById("fg-ide-restore-btn");
         if (restoreBtn) {
