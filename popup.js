@@ -205,17 +205,38 @@ function updateMarketStatusIndicator(isOpenFromServer) {
   const textEl = document.getElementById("marketStatusText");
   if (!descEl || !textEl) return;
 
-  let isOpen = false;
-  if (typeof isOpenFromServer === "boolean") {
-    isOpen = isOpenFromServer;
-  } else {
+  let isLocalOpen = false;
+  try {
+    const formatter = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Kolkata",
+      hour12: false,
+      weekday: "short",
+      hour: "numeric",
+      minute: "numeric",
+      second: "numeric"
+    });
+    const parts = formatter.formatToParts(new Date());
+    const map = {};
+    for (const p of parts) map[p.type] = p.value;
+    const weekday = map.weekday;
+    const isWeekday = weekday !== "Sat" && weekday !== "Sun";
+    if (isWeekday) {
+      const hour = parseInt(map.hour, 10) % 24;
+      const minute = parseInt(map.minute, 10);
+      const totalMins = hour * 60 + minute;
+      isLocalOpen = totalMins >= 540 && totalMins < 930;
+    }
+  } catch (e) {
     const now = new Date();
     const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
     const ist = new Date(utc + (3600000 * 5.5));
     const day = ist.getDay();
     const totalMins = ist.getHours() * 60 + ist.getMinutes();
-    isOpen = (day >= 1 && day <= 5) && (totalMins >= 540 && totalMins < 930);
+    isLocalOpen = (day >= 1 && day <= 5) && (totalMins >= 540 && totalMins < 930);
   }
+
+  // Strictly closed past 3:30 PM IST or weekends; during hours, respect backend closed (holiday)
+  const isOpen = isLocalOpen && (isOpenFromServer !== false);
 
   if (isOpen) {
     descEl.className = "setting-desc market-open";
@@ -251,6 +272,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   } catch (e) {}
 
   updateMarketStatusIndicator();
+  setInterval(updateMarketStatusIndicator, 1000);
 
   // Request fresh sync from background
   chrome.runtime.sendMessage({ type: "FORCE_REFRESH" });

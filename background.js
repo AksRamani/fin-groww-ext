@@ -52,13 +52,34 @@ async function apiFetch(path, options = {}, timeoutMs = 12000) {
 
 // Calculate Indian market hours locally (IST: Mon-Fri 9:00 AM - 3:30 PM)
 function isIndianMarketOpenNow() {
-  const now = new Date();
-  const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
-  const ist = new Date(utc + (3600000 * 5.5));
-  const day = ist.getDay();
-  if (day === 0 || day === 6) return false;
-  const totalMins = ist.getHours() * 60 + ist.getMinutes();
-  return totalMins >= 540 && totalMins < 930;
+  try {
+    const formatter = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Kolkata",
+      hour12: false,
+      weekday: "short",
+      hour: "numeric",
+      minute: "numeric",
+      second: "numeric"
+    });
+    const parts = formatter.formatToParts(new Date());
+    const map = {};
+    for (const p of parts) map[p.type] = p.value;
+    const weekday = map.weekday;
+    const isWeekday = weekday !== "Sat" && weekday !== "Sun";
+    if (!isWeekday) return false;
+    const hour = parseInt(map.hour, 10) % 24;
+    const minute = parseInt(map.minute, 10);
+    const totalMins = hour * 60 + minute;
+    return totalMins >= 540 && totalMins < 930;
+  } catch (e) {
+    const now = new Date();
+    const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+    const ist = new Date(utc + (3600000 * 5.5));
+    const day = ist.getDay();
+    if (day === 0 || day === 6) return false;
+    const totalMins = ist.getHours() * 60 + ist.getMinutes();
+    return totalMins >= 540 && totalMins < 930;
+  }
 }
 
 // Master Fast Sync Routine: polls state, running leaderboard, and profiles list
@@ -87,7 +108,8 @@ async function performMasterSync() {
     ]);
 
     let isMarketOpen = isIndianMarketOpenNow();
-    if (marketData && typeof marketData.is_trading_hours === "boolean") {
+    // Only accept backend trading hours if local clock says market is in trading window (backend can flag holidays)
+    if (isMarketOpen && marketData && typeof marketData.is_trading_hours === "boolean") {
       isMarketOpen = marketData.is_trading_hours;
     }
 
@@ -183,8 +205,15 @@ async function performMasterSync() {
 // Background Live Tick: Triggers NSE live mark-to-market re-calculation on backend
 async function triggerLiveMarketTick() {
   if (isTicking) return;
-  // If Indian market is closed, skip heavy live quotes tick
+  // If Indian market is closed, skip heavy live quotes tick and ensure storage reflects market closed
   if (!isIndianMarketOpenNow()) {
+    try {
+      const stored = await chrome.storage.local.get(["fg_latest_data"]);
+      if (stored?.fg_latest_data?.is_market_open === true) {
+        stored.fg_latest_data.is_market_open = false;
+        await chrome.storage.local.set({ fg_latest_data: stored.fg_latest_data });
+      }
+    } catch (e) {}
     return;
   }
   isTicking = true;
@@ -220,6 +249,7 @@ async function triggerLiveMarketTick() {
           status: status,
           leaderboard: prev.leaderboard || [],
           profiles: stored.fg_profiles_cache || prev.profiles || [],
+          is_market_open: isIndianMarketOpenNow(),
           timestamp: Date.now()
         }
       };

@@ -676,25 +676,66 @@
 
   // Indian Market Hours (IST: Mon-Fri 9:00 AM - 3:30 PM)
   function isIndianMarketOpenNow() {
-    const now = new Date();
-    const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
-    const ist = new Date(utc + (3600000 * 5.5));
-    const day = ist.getDay();
-    if (day === 0 || day === 6) return false;
-    const totalMins = ist.getHours() * 60 + ist.getMinutes();
-    return totalMins >= 540 && totalMins < 930;
+    try {
+      const formatter = new Intl.DateTimeFormat("en-US", {
+        timeZone: "Asia/Kolkata",
+        hour12: false,
+        weekday: "short",
+        hour: "numeric",
+        minute: "numeric",
+        second: "numeric"
+      });
+      const parts = formatter.formatToParts(new Date());
+      const map = {};
+      for (const p of parts) map[p.type] = p.value;
+      const weekday = map.weekday;
+      const isWeekday = weekday !== "Sat" && weekday !== "Sun";
+      if (!isWeekday) return false;
+      const hour = parseInt(map.hour, 10) % 24;
+      const minute = parseInt(map.minute, 10);
+      const totalMins = hour * 60 + minute;
+      // 9:00 AM (540 mins) to 3:30 PM (930 mins) IST
+      return totalMins >= 540 && totalMins < 930;
+    } catch (e) {
+      const now = new Date();
+      const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+      const ist = new Date(utc + (3600000 * 5.5));
+      const day = ist.getDay();
+      if (day === 0 || day === 6) return false;
+      const totalMins = ist.getHours() * 60 + ist.getMinutes();
+      return totalMins >= 540 && totalMins < 930;
+    }
   }
 
   // Update visibility: hides both status bar & pill when Indian market is closed unless user enabled showAfterHours
   function updateMarketVisibility() {
     if (!hostEl) return;
-    const isMarketOpen = serverMarketOpen !== null ? serverMarketOpen : isIndianMarketOpenNow();
+    const localOpen = isIndianMarketOpenNow();
+    // Local clock is strictly authoritative for the 3:30 PM cutoff.
+    // If local clock says market is closed (>= 3:30 PM, < 9:00 AM, or weekend), it IS closed.
+    // During trading hours (9:00 AM - 3:30 PM), if backend explicitly reports closed (holiday), it also closes.
+    const isMarketOpen = localOpen && (serverMarketOpen !== false);
     const shouldDisplay = isMarketOpen || showAfterHours;
+
+    const bar = shadowRoot?.getElementById("fg-ide-statusbar");
+    const restoreBtn = shadowRoot?.getElementById("fg-ide-restore-btn");
+    const drawer = shadowRoot?.getElementById("fg-ide-drawer");
 
     if (!shouldDisplay) {
       hostEl.style.setProperty("display", "none", "important");
+      if (bar) bar.style.setProperty("display", "none", "important");
+      if (restoreBtn) restoreBtn.style.setProperty("display", "none", "important");
+      if (drawer) drawer.style.setProperty("display", "none", "important");
+      hidePopover();
     } else {
       hostEl.style.removeProperty("display");
+      if (bar) bar.style.removeProperty("display");
+      if (drawer) drawer.style.removeProperty("display");
+      if (restoreBtn) {
+        restoreBtn.style.removeProperty("display");
+        const isMin = localStorage.getItem("fg_is_minimized") === "true";
+        restoreBtn.style.display = isMin ? "inline-flex" : "none";
+      }
     }
   }
 
@@ -968,21 +1009,21 @@
 
     // Helper to toggle and persist minimized state across tabs and refreshes
     const setMinimizedState = (minimized) => {
+      try {
+        localStorage.setItem("fg_is_minimized", minimized ? "true" : "false");
+      } catch (e) {}
+      chrome.storage.local.set({ fg_is_minimized: !!minimized });
+
       if (minimized) {
         bar.classList.add("fg-minimized");
         drawer.classList.remove("fg-drawer-open");
         isDrawerOpen = false;
         const icon = shadowRoot.getElementById("fg-drawer-icon");
         if (icon) icon.textContent = "▲";
-        restoreBtn.style.display = "inline-flex";
       } else {
         bar.classList.remove("fg-minimized");
-        restoreBtn.style.display = "none";
       }
-      try {
-        localStorage.setItem("fg_is_minimized", minimized ? "true" : "false");
-      } catch (e) {}
-      chrome.storage.local.set({ fg_is_minimized: !!minimized });
+      updateMarketVisibility();
     };
 
     // Minimize Button ("—"): Hides the status bar and displays the small floating restore pill
@@ -1523,21 +1564,19 @@
         const isMin = changes.fg_is_minimized.newValue === true;
         const bar = shadowRoot?.getElementById("fg-ide-statusbar");
         const drawer = shadowRoot?.getElementById("fg-ide-drawer");
-        const restoreBtn = shadowRoot?.getElementById("fg-ide-restore-btn");
         const icon = shadowRoot?.getElementById("fg-drawer-icon");
         if (isMin) {
           if (bar) bar.classList.add("fg-minimized");
           if (drawer) drawer.classList.remove("fg-drawer-open");
           isDrawerOpen = false;
           if (icon) icon.textContent = "▲";
-          if (restoreBtn) restoreBtn.style.display = "inline-flex";
         } else {
           if (bar) bar.classList.remove("fg-minimized");
-          if (restoreBtn) restoreBtn.style.display = "none";
         }
         try {
           localStorage.setItem("fg_is_minimized", isMin ? "true" : "false");
         } catch (e) {}
+        updateMarketVisibility();
       }
       if (changes.fg_show_after_hours !== undefined) {
         showAfterHours = changes.fg_show_after_hours.newValue === true;
@@ -1588,6 +1627,7 @@
   // Keep alive in DOM (in case SPAs / React re-renders remove it)
   function ensureMounted() {
     createShadowContainer();
+    updateMarketVisibility();
   }
 
   // Initialization
@@ -1605,8 +1645,8 @@
       observer.observe(document.body, { childList: true });
     }
 
-    // Periodically re-check Indian market hours visibility (at 3:30 PM & 9:00 AM)
-    setInterval(updateMarketVisibility, 15000);
+    // High-frequency check (every 1s) so the instant 3:30 PM arrives, the bar and pill auto-hide without tab refresh
+    setInterval(updateMarketVisibility, 1000);
 
     try {
       const stored = await chrome.storage.local.get(["fg_latest_data", "fg_selected_profile", "fg_is_minimized", "fg_pill_pos", "fg_show_after_hours"]);
