@@ -767,6 +767,18 @@
     // 5. Main Status Bar
     const bar = document.createElement("div");
     bar.id = "fg-ide-statusbar";
+
+    let isInitiallyMinimized = false;
+    try {
+      if (localStorage.getItem("fg_is_minimized") === "true") {
+        isInitiallyMinimized = true;
+      }
+    } catch (e) {}
+
+    if (isInitiallyMinimized) {
+      bar.classList.add("fg-minimized");
+    }
+
     bar.innerHTML = `
       <!-- Left: Profile selector chip, Overall P&L & Running Rank -->
       <div class="fg-bar-left">
@@ -796,7 +808,7 @@
         </div>
       </div>
 
-      <!-- Right: Status, Refresh, Drawer Toggle & "-" Table Toggle Button -->
+      <!-- Right: Status, Refresh, Drawer Toggle & "-" Minimize Button -->
       <div class="fg-bar-right">
         <div class="fg-status-pill fg-status-running" id="fg-engine-status" title="Trading Engine Status">
           <span class="fg-status-dot"></span>
@@ -823,6 +835,9 @@
     restoreBtn.id = "fg-ide-restore-btn";
     restoreBtn.innerHTML = `<span>(Alt+S)</span> <span id="fg-restore-pnl" style="font-size:11px;font-weight:800;">P&L: ₹0</span> <span>▲</span>`;
     restoreBtn.title = "Restore Status Bar (Alt+S)";
+    if (isInitiallyMinimized) {
+      restoreBtn.style.display = "inline-flex";
+    }
     shadowRoot.appendChild(restoreBtn);
 
     setupEventListeners(bar, drawer, restoreBtn);
@@ -895,14 +910,28 @@
       if (icon) icon.textContent = "▲";
     });
 
+    // Helper to toggle and persist minimized state across tabs and refreshes
+    const setMinimizedState = (minimized) => {
+      if (minimized) {
+        bar.classList.add("fg-minimized");
+        drawer.classList.remove("fg-drawer-open");
+        isDrawerOpen = false;
+        const icon = shadowRoot.getElementById("fg-drawer-icon");
+        if (icon) icon.textContent = "▲";
+        restoreBtn.style.display = "inline-flex";
+      } else {
+        bar.classList.remove("fg-minimized");
+        restoreBtn.style.display = "none";
+      }
+      try {
+        localStorage.setItem("fg_is_minimized", minimized ? "true" : "false");
+      } catch (e) {}
+      chrome.storage.local.set({ fg_is_minimized: !!minimized });
+    };
+
     // Minimize Button ("—"): Hides the status bar and displays the small floating restore pill
     minimizeBtn.addEventListener("click", () => {
-      bar.classList.add("fg-minimized");
-      drawer.classList.remove("fg-drawer-open");
-      isDrawerOpen = false;
-      const icon = shadowRoot.getElementById("fg-drawer-icon");
-      if (icon) icon.textContent = "▲";
-      restoreBtn.style.display = "inline-flex";
+      setMinimizedState(true);
     });
 
     // Close All Positions Action
@@ -916,24 +945,16 @@
       }
     });
 
-    // Restore Button
+    // Restore Button: Restores the status bar and hides the small pill
     restoreBtn.addEventListener("click", () => {
-      bar.classList.remove("fg-minimized");
-      restoreBtn.style.display = "none";
+      setMinimizedState(false);
     });
 
     // Keyboard Shortcut (Alt + S)
     window.addEventListener("keydown", (e) => {
       if (e.altKey && (e.key === "s" || e.key === "S")) {
         const isMin = bar.classList.contains("fg-minimized");
-        if (isMin) {
-          bar.classList.remove("fg-minimized");
-          restoreBtn.style.display = "none";
-        } else {
-          bar.classList.add("fg-minimized");
-          drawer.classList.remove("fg-drawer-open");
-          restoreBtn.style.display = "inline-flex";
-        }
+        setMinimizedState(!isMin);
       }
     });
 
@@ -1340,6 +1361,26 @@
   // Real-time synchronization listener: listens to background sync on ALL tabs
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === "local") {
+      if (changes.fg_is_minimized !== undefined) {
+        const isMin = changes.fg_is_minimized.newValue === true;
+        const bar = shadowRoot?.getElementById("fg-ide-statusbar");
+        const drawer = shadowRoot?.getElementById("fg-ide-drawer");
+        const restoreBtn = shadowRoot?.getElementById("fg-ide-restore-btn");
+        const icon = shadowRoot?.getElementById("fg-drawer-icon");
+        if (isMin) {
+          if (bar) bar.classList.add("fg-minimized");
+          if (drawer) drawer.classList.remove("fg-drawer-open");
+          isDrawerOpen = false;
+          if (icon) icon.textContent = "▲";
+          if (restoreBtn) restoreBtn.style.display = "inline-flex";
+        } else {
+          if (bar) bar.classList.remove("fg-minimized");
+          if (restoreBtn) restoreBtn.style.display = "none";
+        }
+        try {
+          localStorage.setItem("fg_is_minimized", isMin ? "true" : "false");
+        } catch (e) {}
+      }
       if (changes.fg_selected_profile) {
         currentProfile = changes.fg_selected_profile.newValue || currentProfile;
         renderProfileSelectors();
@@ -1399,7 +1440,23 @@
     }
 
     try {
-      const stored = await chrome.storage.local.get(["fg_latest_data", "fg_selected_profile"]);
+      const stored = await chrome.storage.local.get(["fg_latest_data", "fg_selected_profile", "fg_is_minimized"]);
+      if (stored.fg_is_minimized !== undefined) {
+        const isMin = stored.fg_is_minimized === true;
+        const bar = shadowRoot?.getElementById("fg-ide-statusbar");
+        const restoreBtn = shadowRoot?.getElementById("fg-ide-restore-btn");
+        if (isMin) {
+          if (bar) bar.classList.add("fg-minimized");
+          if (restoreBtn) restoreBtn.style.display = "inline-flex";
+        } else {
+          if (bar) bar.classList.remove("fg-minimized");
+          if (restoreBtn) restoreBtn.style.display = "none";
+        }
+        try {
+          localStorage.setItem("fg_is_minimized", isMin ? "true" : "false");
+        } catch (e) {}
+      }
+
       if (stored.fg_selected_profile) {
         currentProfile = stored.fg_selected_profile;
       }
