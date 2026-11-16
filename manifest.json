@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "FinGroww IDE Status Bar & Paper Trading Monitor",
+  "name": "FinGroww Paper Trading Monitor",
   "version": "1.1.0",
-  "description": "IDE status bar on ALL browser tabs showing live open positions, current price (LTP), overall P&L, and leaderboard rank in real time.",
+  "description": "Real-time trading status bar on all browser tabs showing live open positions, current price (LTP), overall P&L, and leaderboard rank.",
   "permissions": [
     "storage",
     "alarms"

@@ -100,7 +100,7 @@ function updatePopupUi(payload) {
   stBadge.className = `status-badge status-${st.toLowerCase()}`;
 
   // 5. Open Positions Count & List
-  const posList = cachedPositions;
+  const posList = sortPositions(cachedPositions);
   document.getElementById("posCountBadge").textContent = posList.length;
 
   const flashMap = {};
@@ -122,12 +122,29 @@ function updatePopupUi(payload) {
   document.getElementById("lastUpdatedTime").textContent = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
 
+// Sort positions from highest profit to highest loss
+function sortPositions(positions) {
+  if (!positions || !Array.isArray(positions)) return [];
+  return [...positions].sort((a, b) => {
+    const pnlA = Number(a.unrealized_pnl) || 0;
+    const pnlB = Number(b.unrealized_pnl) || 0;
+    if (pnlB !== pnlA) {
+      return pnlB - pnlA; // Highest profit first, down to largest loss
+    }
+    const pctA = Number(a.pnl_pct) || 0;
+    const pctB = Number(b.pnl_pct) || 0;
+    return pctB - pctA;
+  });
+}
+
 // Render Positions Cards with Individual Exit Button
 function renderPositionsList(positions, flashMap) {
   const container = document.getElementById("positionsList");
   if (!container) return;
 
-  if (!positions || positions.length === 0) {
+  const sortedPositions = sortPositions(positions);
+
+  if (!sortedPositions || sortedPositions.length === 0) {
     container.innerHTML = `
       <div class="empty-state">
         <div class="empty-icon">📈</div>
@@ -137,7 +154,7 @@ function renderPositionsList(positions, flashMap) {
     return;
   }
 
-  container.innerHTML = positions.map((pos) => {
+  container.innerHTML = sortedPositions.map((pos) => {
     const key = pos.trade_id || pos.symbol;
     const isBuy = pos.side === "BUY";
     const pnl = Number(pos.unrealized_pnl) || 0;

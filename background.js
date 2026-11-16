@@ -24,6 +24,21 @@ chrome.storage.local.get(["fg_profile_caches", "fg_selected_profile"], (res) => 
   }
 });
 
+// Sort positions from highest profit to highest loss
+function sortPositions(positions) {
+  if (!positions || !Array.isArray(positions)) return [];
+  return [...positions].sort((a, b) => {
+    const pnlA = Number(a.unrealized_pnl) || 0;
+    const pnlB = Number(b.unrealized_pnl) || 0;
+    if (pnlB !== pnlA) {
+      return pnlB - pnlA; // Highest profit first, down to largest loss
+    }
+    const pctA = Number(a.pnl_pct) || 0;
+    const pctB = Number(b.pnl_pct) || 0;
+    return pctB - pctA;
+  });
+}
+
 // Dual-host resilient fetch
 async function apiFetch(path, options = {}, timeoutMs = 12000) {
   const hosts = [API_BASE, LOCAL_API_BASE];
@@ -145,7 +160,7 @@ async function performMasterSync() {
 
     // Only accept sessionData if server actually responded with valid state
     if (sessionData && (sessionData.active_positions !== undefined || sessionData.account !== undefined)) {
-      activePositions = sessionData.active_positions || [];
+      activePositions = sortPositions(sessionData.active_positions || []);
       account = sessionData.account || {};
       engineStatus = sessionData.status || "RUNNING";
 
@@ -225,7 +240,7 @@ async function triggerLiveMarketTick() {
 
     if (tickResult && tickResult.state) {
       const state = tickResult.state;
-      const positions = state.active_positions || [];
+      const positions = sortPositions(state.active_positions || []);
       const account = state.account || {};
       const status = state.status || "RUNNING";
 

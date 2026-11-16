@@ -1,21 +1,21 @@
-/* FinGroww IDE Status Bar Stylesheet */
+/* FinGroww Trading Status Bar Stylesheet */
 :root {
-  --fg-ide-bg: #0d1117;
-  --fg-ide-surface: #161b22;
-  --fg-ide-hover: #21262d;
-  --fg-ide-border: #30363d;
-  --fg-ide-border-light: rgba(240, 246, 252, 0.1);
-  --fg-ide-text: #c9d1d9;
-  --fg-ide-text-bright: #f0f6fc;
-  --fg-ide-text-dim: #8b949e;
+  --fg-ide-bg: #0b0f17;
+  --fg-ide-surface: #111827;
+  --fg-ide-hover: #1f2937;
+  --fg-ide-border: rgba(255, 255, 255, 0.08);
+  --fg-ide-border-light: rgba(255, 255, 255, 0.12);
+  --fg-ide-text: #e2e8f0;
+  --fg-ide-text-bright: #f8fafc;
+  --fg-ide-text-dim: #94a3b8;
   --fg-ide-cyan: #38bdf8;
-  --fg-ide-green: #3fb950;
-  --fg-ide-green-glow: rgba(63, 185, 80, 0.25);
-  --fg-ide-red: #f85149;
-  --fg-ide-red-glow: rgba(248, 81, 73, 0.25);
-  --fg-ide-gold: #d29922;
-  --fg-ide-purple: #bc8cff;
-  --fg-ide-font: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --fg-ide-green: #34d399;
+  --fg-ide-green-glow: rgba(52, 211, 153, 0.25);
+  --fg-ide-red: #f87171;
+  --fg-ide-red-glow: rgba(248, 113, 113, 0.25);
+  --fg-ide-gold: #fbbf24;
+  --fg-ide-purple: #c084fc;
+  --fg-ide-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", "Helvetica Neue", Arial, sans-serif;
 }
 
 /* Bottom Bar Container */
@@ -83,25 +83,6 @@
   align-items: center !important;
   gap: 8px !important;
   flex-shrink: 0 !important;
-}
-
-.fg-brand-badge {
-  display: inline-flex !important;
-  align-items: center !important;
-  gap: 5px !important;
-  background: rgba(56, 189, 248, 0.12) !important;
-  color: var(--fg-ide-cyan) !important;
-  border: 1px solid rgba(56, 189, 248, 0.25) !important;
-  border-radius: 4px !important;
-  padding: 2px 7px !important;
-  font-weight: 800 !important;
-  font-size: 11px !important;
-  letter-spacing: 0.5px !important;
-  cursor: pointer !important;
-}
-
-.fg-brand-badge:hover {
-  background: rgba(56, 189, 248, 0.22) !important;
 }
 
 /* Profile Selector Dropdown */

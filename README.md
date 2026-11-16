@@ -1,23 +1,25 @@
-# FinGroww Paper Trading - Multi-Tab IDE Status Bar Extension
+# FinGroww Paper Trading - Multi-Tab Trading Monitor & Status Bar Extension
 
-A high-frequency Chrome extension (Manifest V3) that docks an IDE-style bottom status bar across **all browser tabs** with real-time stock price and open position synchronization, live market ticks, running leaderboard rankings, and individual trade exit controls.
+A high-frequency Chrome extension (Manifest V3) that docks a professional trading status bar across **all browser tabs** with real-time stock price and open position synchronization, live market ticks, running leaderboard rankings, and individual trade exit controls.
 
 ---
 
 ## ✨ Features & Architecture
 
-### 1. IDE Status Bar on All Browser Tabs
+### 1. Professional Trading Status Bar on All Browser Tabs
 - **Zero Page Interference**: Injected into every page inside an isolated **Shadow DOM** (`#fingroww-statusbar-host`) with `position: fixed !important; bottom: 0; width: 100%; height: 38px; z-index: 2147483647 !important;`. Host page CSS, layout resets, and frameworks cannot break its styling.
 - **SPA & Framework Resilient**: A background `MutationObserver` continuously ensures the bar stays mounted across React/Vue/Angular client-side route changes and dynamic DOM updates.
+- **Glassmorphism & High-End Financial UI**: Dark translucent acrylic styling with backdrop blur, polished typography, tabular numeric alignment, and sleek status chips.
 
-### 2. Live Open Positions & Visual Feedback
+### 2. Live Open Positions Sorted from Highest Profit to Highest Loss
+- **Smart P&L Ordering**: Open positions are automatically sorted descending from highest profit down to largest loss across the bottom ticker, drawer table, and popup view.
 - **Dynamic Borders**:
-  - **Profitable Trades**: Highlighted with a **1.5px green border** (`#22c55e`) and soft green glow.
-  - **Loss Trades**: Highlighted with a **1.5px red border** (`#ef4444`) and soft red tint.
+  - **Profitable Trades**: Highlighted with an emerald green border and soft glow.
+  - **Loss Trades**: Highlighted with a crimson red border and soft tint.
 - **P&L & Percentage Returns**: Every open position card in the horizontal ticker displays both the rupee floating P&L and percentage return:
   ```
-  [BUY] TRENT 3200 CE   ₹40.40   -₹1,810.99 (-16.71%)   [✕ Exit]
   [BUY] NIFTY 25100 CE  ₹12.40   +₹320.00   (+2.50%)    [✕ Exit]
+  [BUY] TRENT 3200 CE   ₹40.40   -₹1,810.99 (-16.71%)   [✕ Exit]
   ```
 - **Real-Time Price Flashes**: Quotes dynamically flash **Green** when prices tick up and **Red** on price drops.
 - **Drag-to-Scroll Ticker**: Smooth horizontal scroll supporting mouse drag and trackpad gestures.

@@ -1,5 +1,5 @@
 /**
- * FinGroww Paper Trading - Multi-Tab IDE Status Bar & Realtime Monitor
+ * FinGroww Paper Trading - Multi-Tab Trading Monitor & Status Bar
  * Features:
  * - Green border for profit positions, red border for loss positions
  * - Percentage of profit and loss in status bar and detailed table
@@ -28,7 +28,7 @@
       padding: 0 !important;
     }
 
-    /* Fixed Bottom Status Bar */
+    /* Fixed Bottom Status Bar Container */
     #fg-ide-statusbar {
       position: fixed !important;
       bottom: 0px !important;
@@ -36,19 +36,21 @@
       right: 0px !important;
       width: 100% !important;
       height: 38px !important;
-      background: #0d1117 !important;
-      background-color: rgba(13, 17, 23, 0.98) !important;
-      backdrop-filter: blur(12px) !important;
-      -webkit-backdrop-filter: blur(12px) !important;
-      border-top: 1px solid #30363d !important;
-      color: #c9d1d9 !important;
-      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace !important;
-      font-size: 12px !important;
+      background: rgba(11, 15, 23, 0.94) !important;
+      background-color: rgba(11, 15, 23, 0.94) !important;
+      backdrop-filter: blur(16px) saturate(180%) !important;
+      -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
+      border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+      color: #e2e8f0 !important;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", "Helvetica Neue", Arial, sans-serif !important;
+      -webkit-font-smoothing: antialiased !important;
+      -moz-osx-font-smoothing: grayscale !important;
+      font-size: 11.5px !important;
       display: flex !important;
       align-items: center !important;
       justify-content: space-between !important;
       padding: 0 10px !important;
-      box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.8) !important;
+      box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.5), 0 -1px 0 rgba(255, 255, 255, 0.03) inset !important;
       user-select: none !important;
       line-height: 1.4 !important;
       pointer-events: auto !important;
@@ -60,17 +62,19 @@
       transform: translateY(100%) !important;
     }
 
-    /* Floating Restore Button when Minimized (Draggable anywhere on screen) */
+    /* Floating Restore Button when Minimized */
     #fg-ide-restore-btn {
       position: fixed !important;
-      bottom: 12px;
+      bottom: 14px;
       right: 18px;
-      background: #161b22 !important;
-      border: 1px solid #38bdf8 !important;
+      background: rgba(11, 15, 23, 0.94) !important;
+      backdrop-filter: blur(16px) saturate(180%) !important;
+      -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
+      border: 1px solid rgba(56, 189, 248, 0.4) !important;
       color: #38bdf8 !important;
       border-radius: 20px !important;
-      padding: 5px 12px !important;
-      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace !important;
+      padding: 5px 13px !important;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif !important;
       font-size: 11px !important;
       font-weight: 700 !important;
       display: none;
@@ -81,21 +85,21 @@
       -webkit-user-select: none !important;
       z-index: 2147483647 !important;
       pointer-events: auto !important;
-      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.7), 0 0 10px rgba(56, 189, 248, 0.3) !important;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6), 0 0 12px rgba(56, 189, 248, 0.25) !important;
       transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease !important;
       touch-action: none !important;
     }
 
     #fg-ide-restore-btn:hover {
-      background: #1c2128 !important;
-      border-color: #58a6ff !important;
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.8), 0 0 14px rgba(56, 189, 248, 0.45) !important;
+      background: rgba(22, 27, 34, 0.98) !important;
+      border-color: #38bdf8 !important;
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.7), 0 0 16px rgba(56, 189, 248, 0.4) !important;
     }
 
     #fg-ide-restore-btn.fg-dragging {
       cursor: grabbing !important;
       opacity: 0.95 !important;
-      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.9), 0 0 18px rgba(56, 189, 248, 0.6) !important;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.85), 0 0 20px rgba(56, 189, 248, 0.6) !important;
       transform: scale(1.05) !important;
       transition: none !important;
     }
@@ -112,41 +116,43 @@
     .fg-profile-select-chip {
       display: inline-flex !important;
       align-items: center !important;
-      gap: 4px !important;
-      background: #161b22 !important;
-      border: 1px solid #30363d !important;
-      border-radius: 4px !important;
-      padding: 2px 7px !important;
+      gap: 5px !important;
+      background: rgba(255, 255, 255, 0.04) !important;
+      border: 1px solid rgba(255, 255, 255, 0.1) !important;
+      border-radius: 6px !important;
+      padding: 2px 8px !important;
       height: 26px !important;
       cursor: pointer !important;
-      transition: border-color 0.2s ease !important;
+      transition: all 0.2s ease !important;
     }
 
     .fg-profile-select-chip:hover {
-      border-color: #58a6ff !important;
+      background: rgba(255, 255, 255, 0.08) !important;
+      border-color: rgba(56, 189, 248, 0.4) !important;
     }
 
     .fg-chip-icon {
       font-size: 11px !important;
       line-height: 1 !important;
+      opacity: 0.85 !important;
     }
 
     #fg-bar-profile-select {
       background: transparent !important;
       border: none !important;
-      color: #58a6ff !important;
+      color: #38bdf8 !important;
       font-family: inherit !important;
       font-size: 11px !important;
-      font-weight: 700 !important;
+      font-weight: 600 !important;
       cursor: pointer !important;
       outline: none !important;
-      max-width: 130px !important;
+      max-width: 125px !important;
       text-overflow: ellipsis !important;
     }
 
     #fg-bar-profile-select option {
       background: #161b22 !important;
-      color: #c9d1d9 !important;
+      color: #f0f6fc !important;
     }
 
     /* Overall P&L Pill */
@@ -154,51 +160,70 @@
       display: inline-flex !important;
       align-items: center !important;
       gap: 6px !important;
-      padding: 3px 9px !important;
-      border-radius: 4px !important;
-      font-weight: 800 !important;
-      font-size: 11px !important;
+      padding: 2px 10px !important;
+      height: 26px !important;
+      border-radius: 6px !important;
+      font-weight: 700 !important;
+      font-size: 11.5px !important;
+      font-variant-numeric: tabular-nums !important;
       white-space: nowrap !important;
       cursor: pointer !important;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    }
+
+    .fg-pnl-badge:hover {
+      filter: brightness(1.15) !important;
+      transform: translateY(-0.5px) !important;
+    }
+
+    .fg-pnl-positive {
+      background: rgba(16, 185, 129, 0.12) !important;
+      border: 1px solid rgba(16, 185, 129, 0.35) !important;
+      color: #34d399 !important;
+      box-shadow: 0 0 10px rgba(16, 185, 129, 0.12) !important;
+    }
+
+    .fg-pnl-negative {
+      background: rgba(239, 68, 68, 0.12) !important;
+      border: 1px solid rgba(239, 68, 68, 0.35) !important;
+      color: #f87171 !important;
+      box-shadow: 0 0 10px rgba(239, 68, 68, 0.12) !important;
+    }
+
+    .fg-pnl-neutral {
+      background: rgba(255, 255, 255, 0.04) !important;
+      border: 1px solid rgba(255, 255, 255, 0.1) !important;
+      color: #94a3b8 !important;
     }
 
     /* Rank Badge among Running Profiles */
     .fg-rank-badge {
       display: inline-flex !important;
       align-items: center !important;
-      gap: 4px !important;
-      padding: 2px 7px !important;
-      border-radius: 4px !important;
-      background: rgba(210, 153, 34, 0.15) !important;
-      border: 1px solid rgba(210, 153, 34, 0.35) !important;
-      color: #e3b341 !important;
-      font-weight: 700 !important;
+      gap: 5px !important;
+      padding: 2px 8px !important;
+      height: 26px !important;
+      border-radius: 6px !important;
+      background: rgba(245, 158, 11, 0.1) !important;
+      border: 1px solid rgba(245, 158, 11, 0.25) !important;
+      color: #fbbf24 !important;
+      font-weight: 600 !important;
       font-size: 11px !important;
+      font-variant-numeric: tabular-nums !important;
       white-space: nowrap !important;
+      transition: all 0.2s ease !important;
+    }
+
+    .fg-rank-badge:hover {
+      background: rgba(245, 158, 11, 0.18) !important;
+      border-color: rgba(245, 158, 11, 0.45) !important;
     }
 
     .fg-rank-badge.top-1 {
-      background: rgba(255, 215, 0, 0.25) !important;
-      border-color: #ffd700 !important;
-      color: #ffd700 !important;
-    }
-
-    .fg-pnl-positive {
-      background: rgba(34, 197, 94, 0.16) !important;
-      border: 1px solid rgba(34, 197, 94, 0.4) !important;
-      color: #22c55e !important;
-    }
-
-    .fg-pnl-negative {
-      background: rgba(239, 68, 68, 0.16) !important;
-      border: 1px solid rgba(239, 68, 68, 0.4) !important;
-      color: #ef4444 !important;
-    }
-
-    .fg-pnl-neutral {
-      background: #161b22 !important;
-      border: 1px solid #30363d !important;
-      color: #8b949e !important;
+      background: rgba(234, 179, 8, 0.2) !important;
+      border-color: rgba(234, 179, 8, 0.5) !important;
+      color: #fde047 !important;
+      box-shadow: 0 0 10px rgba(234, 179, 8, 0.2) !important;
     }
 
     /* Center Section: Positions Ticker with Maximum Horizontal Space */
@@ -207,22 +232,22 @@
       display: flex !important;
       align-items: center !important;
       overflow: hidden !important;
-      margin: 0 10px !important;
+      margin: 0 8px !important;
       position: relative !important;
-      mask-image: linear-gradient(to right, transparent, black 12px, black calc(100% - 12px), transparent) !important;
-      -webkit-mask-image: linear-gradient(to right, transparent, black 12px, black calc(100% - 12px), transparent) !important;
+      mask-image: linear-gradient(to right, transparent, black 16px, black calc(100% - 16px), transparent) !important;
+      -webkit-mask-image: linear-gradient(to right, transparent, black 16px, black calc(100% - 16px), transparent) !important;
     }
 
     .fg-ticker-track {
       display: flex !important;
       align-items: center !important;
-      gap: 8px !important;
+      gap: 7px !important;
       overflow-x: auto !important;
       overflow-y: hidden !important;
       scrollbar-width: none !important;
       -ms-overflow-style: none !important;
       scroll-behavior: smooth !important;
-      padding: 0 12px !important;
+      padding: 0 14px !important;
       width: 100% !important;
     }
 
@@ -230,79 +255,92 @@
       display: none !important;
     }
 
-    /* Position Pill in Ticker */
+    /* Position Pill Card in Ticker */
     .fg-position-tag {
       display: inline-flex !important;
       align-items: center !important;
       gap: 6px !important;
-      background: #161b22 !important;
-      border: 1px solid #30363d !important;
-      padding: 2px 8px !important;
-      border-radius: 4px !important;
+      background: rgba(22, 27, 34, 0.75) !important;
+      border: 1px solid rgba(255, 255, 255, 0.08) !important;
+      padding: 0 8px !important;
+      height: 26px !important;
+      border-radius: 6px !important;
       font-size: 11px !important;
       white-space: nowrap !important;
       cursor: default !important;
       flex-shrink: 0 !important;
-      transition: all 0.2s ease !important;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
     }
 
     /* Green border if position is in profits */
     .fg-position-tag.fg-pos-profit {
-      border: 1.5px solid #22c55e !important;
+      border: 1px solid rgba(34, 197, 94, 0.38) !important;
       background: rgba(34, 197, 94, 0.08) !important;
-      box-shadow: 0 0 5px rgba(34, 197, 94, 0.25) !important;
+      box-shadow: 0 1px 4px rgba(34, 197, 94, 0.12) !important;
     }
 
     .fg-position-tag.fg-pos-profit:hover {
-      border-color: #16a34a !important;
-      background: rgba(34, 197, 94, 0.16) !important;
-      box-shadow: 0 0 9px rgba(34, 197, 94, 0.4) !important;
+      border-color: rgba(34, 197, 94, 0.8) !important;
+      background: rgba(34, 197, 94, 0.15) !important;
+      box-shadow: 0 2px 10px rgba(34, 197, 94, 0.25) !important;
     }
 
     /* Red border if position is in loss */
     .fg-position-tag.fg-pos-loss {
-      border: 1.5px solid #ef4444 !important;
+      border: 1px solid rgba(239, 68, 68, 0.38) !important;
       background: rgba(239, 68, 68, 0.08) !important;
-      box-shadow: 0 0 5px rgba(239, 68, 68, 0.25) !important;
+      box-shadow: 0 1px 4px rgba(239, 68, 68, 0.12) !important;
     }
 
     .fg-position-tag.fg-pos-loss:hover {
-      border-color: #dc2626 !important;
-      background: rgba(239, 68, 68, 0.16) !important;
-      box-shadow: 0 0 9px rgba(239, 68, 68, 0.4) !important;
+      border-color: rgba(239, 68, 68, 0.8) !important;
+      background: rgba(239, 68, 68, 0.15) !important;
+      box-shadow: 0 2px 10px rgba(239, 68, 68, 0.25) !important;
     }
 
     .fg-position-tag.fg-pos-neutral {
-      border: 1px solid #30363d !important;
+      border: 1px solid rgba(255, 255, 255, 0.08) !important;
     }
 
     .fg-pos-side {
       font-weight: 800 !important;
       font-size: 9px !important;
-      padding: 1px 4px !important;
+      letter-spacing: 0.5px !important;
+      padding: 1.5px 5px !important;
       border-radius: 3px !important;
+      line-height: 1 !important;
     }
 
     .fg-pos-side-buy {
-      background: rgba(34, 197, 94, 0.2) !important;
-      color: #22c55e !important;
+      background: rgba(34, 197, 94, 0.22) !important;
+      color: #4ade80 !important;
     }
 
     .fg-pos-side-sell {
-      background: rgba(239, 68, 68, 0.2) !important;
-      color: #ef4444 !important;
+      background: rgba(239, 68, 68, 0.22) !important;
+      color: #f87171 !important;
     }
 
     .fg-pos-symbol {
       font-weight: 700 !important;
-      color: #f0f6fc !important;
+      font-size: 11.5px !important;
+      color: #f8fafc !important;
       cursor: pointer !important;
+      letter-spacing: 0.2px !important;
+    }
+
+    .fg-pos-symbol:hover {
+      color: #38bdf8 !important;
     }
 
     .fg-pos-ltp {
-      font-weight: 700 !important;
-      color: #e6edf3 !important;
-      padding: 1px 4px !important;
+      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace !important;
+      font-variant-numeric: tabular-nums !important;
+      font-weight: 600 !important;
+      font-size: 11px !important;
+      color: #cbd5e1 !important;
+      background: rgba(255, 255, 255, 0.05) !important;
+      padding: 1px 5px !important;
       border-radius: 3px !important;
       transition: background-color 0.4s ease, color 0.4s ease !important;
     }
@@ -310,54 +348,58 @@
     /* Real-time price flashes */
     .fg-flash-up {
       background: rgba(34, 197, 94, 0.4) !important;
-      color: #22c55e !important;
+      color: #ffffff !important;
     }
 
     .fg-flash-down {
       background: rgba(239, 68, 68, 0.4) !important;
-      color: #ef4444 !important;
+      color: #ffffff !important;
     }
 
     .fg-pos-pnl {
-      font-weight: 800 !important;
+      font-variant-numeric: tabular-nums !important;
+      font-weight: 700 !important;
+      font-size: 11px !important;
     }
 
     .fg-pos-pnl.positive {
-      color: #22c55e !important;
+      color: #34d399 !important;
     }
 
     .fg-pos-pnl.negative {
-      color: #ef4444 !important;
+      color: #f87171 !important;
     }
 
     /* PnL Percentage in status bar */
     .fg-pos-pct {
+      font-variant-numeric: tabular-nums !important;
       font-size: 10px !important;
-      font-weight: 800 !important;
-      margin-left: 2px !important;
+      font-weight: 700 !important;
+      margin-left: 1px !important;
+      opacity: 0.9 !important;
     }
 
     .fg-pos-pct.positive {
-      color: #22c55e !important;
+      color: #34d399 !important;
     }
 
     .fg-pos-pct.negative {
-      color: #ef4444 !important;
+      color: #f87171 !important;
     }
 
     /* Individual Position Exit Button */
     .fg-pos-exit-btn {
-      background: rgba(239, 68, 68, 0.15) !important;
-      border: 1px solid rgba(239, 68, 68, 0.45) !important;
-      color: #ff7b72 !important;
-      padding: 1px 7px !important;
-      border-radius: 3px !important;
-      font-size: 10px !important;
-      font-weight: 700 !important;
+      background: rgba(255, 255, 255, 0.05) !important;
+      border: 1px solid rgba(255, 255, 255, 0.1) !important;
+      color: #94a3b8 !important;
+      padding: 1.5px 6px !important;
+      border-radius: 4px !important;
+      font-size: 9.5px !important;
+      font-weight: 600 !important;
       font-family: inherit !important;
       cursor: pointer !important;
       transition: all 0.15s ease !important;
-      margin-left: 4px !important;
+      margin-left: 2px !important;
       line-height: 1.3 !important;
       white-space: nowrap !important;
     }
@@ -366,19 +408,20 @@
       background: #ef4444 !important;
       border-color: #ef4444 !important;
       color: #ffffff !important;
-      box-shadow: 0 0 6px rgba(239, 68, 68, 0.4) !important;
+      box-shadow: 0 0 8px rgba(239, 68, 68, 0.45) !important;
+      transform: translateY(-0.5px) !important;
     }
 
     .fg-pos-exit-btn.exiting {
       opacity: 0.6 !important;
       pointer-events: none !important;
-      background: #30363d !important;
-      color: #8b949e !important;
-      border-color: #484f58 !important;
+      background: #334155 !important;
+      color: #94a3b8 !important;
+      border-color: #475569 !important;
     }
 
     .fg-no-positions {
-      color: #8b949e !important;
+      color: #94a3b8 !important;
       font-size: 11px !important;
       font-style: italic !important;
       padding: 0 10px !important;
@@ -389,7 +432,7 @@
     .fg-bar-right {
       display: flex !important;
       align-items: center !important;
-      gap: 6px !important;
+      gap: 5px !important;
       flex-shrink: 0 !important;
     }
 
@@ -397,16 +440,24 @@
       display: inline-flex !important;
       align-items: center !important;
       gap: 5px !important;
-      padding: 2px 7px !important;
+      padding: 2px 8px !important;
+      height: 26px !important;
       border-radius: 12px !important;
       font-size: 10px !important;
       font-weight: 700 !important;
+      letter-spacing: 0.4px !important;
     }
 
-    .fg-status-running {
-      background: rgba(34, 197, 94, 0.15) !important;
-      border: 1px solid rgba(34, 197, 94, 0.4) !important;
-      color: #22c55e !important;
+    .fg-status-running, .fg-status-live {
+      background: rgba(34, 197, 94, 0.1) !important;
+      border: 1px solid rgba(34, 197, 94, 0.28) !important;
+      color: #4ade80 !important;
+    }
+
+    .fg-status-idle {
+      background: rgba(148, 163, 184, 0.1) !important;
+      border: 1px solid rgba(148, 163, 184, 0.25) !important;
+      color: #94a3b8 !important;
     }
 
     .fg-status-dot {
@@ -414,7 +465,7 @@
       height: 6px !important;
       border-radius: 50% !important;
       background: #22c55e !important;
-      box-shadow: 0 0 8px #22c55e !important;
+      box-shadow: 0 0 6px #22c55e !important;
       animation: fg-pulse 2s infinite !important;
     }
 
@@ -425,25 +476,30 @@
     }
 
     .fg-btn-icon {
-      background: transparent !important;
-      border: 1px solid #30363d !important;
-      color: #8b949e !important;
-      width: 24px !important;
-      height: 24px !important;
-      border-radius: 4px !important;
+      background: rgba(255, 255, 255, 0.04) !important;
+      border: 1px solid rgba(255, 255, 255, 0.08) !important;
+      color: #94a3b8 !important;
+      width: 26px !important;
+      height: 26px !important;
+      border-radius: 6px !important;
       display: flex !important;
       align-items: center !important;
       justify-content: center !important;
       cursor: pointer !important;
-      font-size: 12px !important;
-      transition: all 0.2s ease !important;
+      font-size: 11.5px !important;
+      transition: all 0.15s ease !important;
       padding: 0 !important;
     }
 
     .fg-btn-icon:hover {
-      background: #21262d !important;
-      color: #f0f6fc !important;
-      border-color: #8b949e !important;
+      background: rgba(255, 255, 255, 0.1) !important;
+      color: #f8fafc !important;
+      border-color: rgba(255, 255, 255, 0.2) !important;
+      transform: translateY(-0.5px) !important;
+    }
+
+    .fg-btn-icon:active {
+      transform: scale(0.92) !important;
     }
 
     .fg-spin {
@@ -455,7 +511,7 @@
       to { transform: rotate(360deg); }
     }
 
-    /* Expandable Bottom Drawer */
+    /* Expandable Bottom Drawer Table */
     #fg-ide-drawer {
       position: fixed !important;
       bottom: 38px !important;
@@ -463,17 +519,16 @@
       right: 0 !important;
       width: 100% !important;
       max-height: 480px !important;
-      background: #0d1117 !important;
-      background-color: rgba(13, 17, 23, 0.98) !important;
-      backdrop-filter: blur(16px) !important;
-      -webkit-backdrop-filter: blur(16px) !important;
-      border-top: 1px solid #30363d !important;
-      box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.8) !important;
+      background: rgba(11, 15, 23, 0.96) !important;
+      backdrop-filter: blur(20px) saturate(180%) !important;
+      -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+      border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
+      box-shadow: 0 -12px 36px rgba(0, 0, 0, 0.8) !important;
       z-index: 2147483646 !important;
       display: none;
       flex-direction: column !important;
-      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace !important;
-      color: #c9d1d9 !important;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif !important;
+      color: #e2e8f0 !important;
       user-select: none !important;
       pointer-events: auto !important;
     }
@@ -484,11 +539,11 @@
 
     .fg-drawer-header {
       padding: 10px 16px !important;
-      border-bottom: 1px solid #30363d !important;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
       display: flex !important;
       align-items: center !important;
       justify-content: space-between !important;
-      background: #161b22 !important;
+      background: rgba(17, 24, 39, 0.85) !important;
     }
 
     .fg-drawer-title-group {
@@ -498,30 +553,33 @@
     }
 
     .fg-drawer-title {
-      font-weight: 800 !important;
+      font-weight: 700 !important;
       font-size: 13px !important;
-      color: #f0f6fc !important;
+      color: #f8fafc !important;
+      letter-spacing: 0.3px !important;
     }
 
     .fg-drawer-select {
-      background: #0d1117 !important;
-      border: 1px solid #30363d !important;
-      color: #58a6ff !important;
-      border-radius: 4px !important;
+      background: rgba(11, 15, 23, 0.9) !important;
+      border: 1px solid rgba(255, 255, 255, 0.12) !important;
+      color: #38bdf8 !important;
+      border-radius: 6px !important;
       padding: 3px 8px !important;
       font-family: inherit !important;
       font-size: 11px !important;
-      font-weight: 700 !important;
+      font-weight: 600 !important;
       cursor: pointer !important;
     }
 
     .fg-drawer-meta-pill {
       font-size: 11px !important;
-      color: #8b949e !important;
-      padding: 2px 8px !important;
-      background: #0d1117 !important;
-      border: 1px solid #30363d !important;
-      border-radius: 4px !important;
+      font-weight: 600 !important;
+      font-variant-numeric: tabular-nums !important;
+      color: #94a3b8 !important;
+      padding: 3px 9px !important;
+      background: rgba(255, 255, 255, 0.04) !important;
+      border: 1px solid rgba(255, 255, 255, 0.08) !important;
+      border-radius: 6px !important;
     }
 
     .fg-drawer-actions {
@@ -531,19 +589,22 @@
     }
 
     .fg-btn-close-all {
-      background: rgba(239, 68, 68, 0.15) !important;
-      border: 1px solid rgba(239, 68, 68, 0.4) !important;
-      color: #ff7b72 !important;
-      padding: 4px 10px !important;
-      border-radius: 4px !important;
+      background: rgba(239, 68, 68, 0.12) !important;
+      border: 1px solid rgba(239, 68, 68, 0.35) !important;
+      color: #f87171 !important;
+      padding: 4px 12px !important;
+      border-radius: 6px !important;
       font-size: 11px !important;
-      font-weight: 700 !important;
+      font-weight: 600 !important;
       cursor: pointer !important;
+      transition: all 0.2s ease !important;
     }
 
     .fg-btn-close-all:hover {
       background: #ef4444 !important;
+      border-color: #ef4444 !important;
       color: #ffffff !important;
+      box-shadow: 0 0 10px rgba(239, 68, 68, 0.4) !important;
     }
 
     .fg-drawer-body {
@@ -555,16 +616,20 @@
     .fg-positions-table {
       width: 100% !important;
       border-collapse: collapse !important;
-      font-size: 11px !important;
+      font-size: 11.5px !important;
       text-align: left !important;
+      font-variant-numeric: tabular-nums !important;
     }
 
     .fg-positions-table th {
-      background: #161b22 !important;
-      color: #8b949e !important;
+      background: rgba(17, 24, 39, 0.95) !important;
+      color: #94a3b8 !important;
       font-weight: 600 !important;
+      font-size: 10.5px !important;
+      text-transform: uppercase !important;
+      letter-spacing: 0.5px !important;
       padding: 8px 12px !important;
-      border-bottom: 1px solid #30363d !important;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
       position: sticky !important;
       top: 0 !important;
       z-index: 2 !important;
@@ -572,35 +637,35 @@
 
     .fg-positions-table td {
       padding: 8px 12px !important;
-      border-bottom: 1px solid #21262d !important;
-      color: #c9d1d9 !important;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+      color: #e2e8f0 !important;
     }
 
     /* Table Rows: Green for profit, Red for loss */
     .fg-positions-table tr.fg-row-profit td {
-      background: rgba(34, 197, 94, 0.07) !important;
-      border-bottom: 1px solid rgba(34, 197, 94, 0.22) !important;
+      background: rgba(34, 197, 94, 0.06) !important;
+      border-bottom: 1px solid rgba(34, 197, 94, 0.18) !important;
     }
 
     .fg-positions-table tr.fg-row-profit:hover td {
-      background: rgba(34, 197, 94, 0.15) !important;
+      background: rgba(34, 197, 94, 0.12) !important;
     }
 
     .fg-positions-table tr.fg-row-profit td:first-child {
-      border-left: 4px solid #22c55e !important;
+      border-left: 3px solid #22c55e !important;
     }
 
     .fg-positions-table tr.fg-row-loss td {
-      background: rgba(239, 68, 68, 0.07) !important;
-      border-bottom: 1px solid rgba(239, 68, 68, 0.22) !important;
+      background: rgba(239, 68, 68, 0.06) !important;
+      border-bottom: 1px solid rgba(239, 68, 68, 0.18) !important;
     }
 
     .fg-positions-table tr.fg-row-loss:hover td {
-      background: rgba(239, 68, 68, 0.15) !important;
+      background: rgba(239, 68, 68, 0.12) !important;
     }
 
     .fg-positions-table tr.fg-row-loss td:first-child {
-      border-left: 4px solid #ef4444 !important;
+      border-left: 3px solid #ef4444 !important;
     }
 
     /* Table Badges for PnL and % */
@@ -608,53 +673,61 @@
       display: inline-block !important;
       padding: 2px 8px !important;
       border-radius: 4px !important;
-      font-weight: 800 !important;
+      font-weight: 700 !important;
       font-size: 11px !important;
+      font-variant-numeric: tabular-nums !important;
       white-space: nowrap !important;
     }
 
     .fg-tbl-profit {
-      background: rgba(34, 197, 94, 0.18) !important;
-      color: #22c55e !important;
-      border: 1px solid rgba(34, 197, 94, 0.45) !important;
+      background: rgba(34, 197, 94, 0.16) !important;
+      color: #34d399 !important;
+      border: 1px solid rgba(34, 197, 94, 0.4) !important;
     }
 
     .fg-tbl-loss {
-      background: rgba(239, 68, 68, 0.18) !important;
-      color: #ef4444 !important;
-      border: 1px solid rgba(239, 68, 68, 0.45) !important;
+      background: rgba(239, 68, 68, 0.16) !important;
+      color: #f87171 !important;
+      border: 1px solid rgba(239, 68, 68, 0.4) !important;
     }
 
     /* Hover Details Tooltip / Popover */
     #fg-position-popover {
       position: fixed !important;
-      background: #161b22 !important;
-      border: 1px solid #38bdf8 !important;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.9) !important;
-      border-radius: 6px !important;
-      padding: 10px 14px !important;
-      font-size: 11px !important;
-      color: #c9d1d9 !important;
+      background: rgba(15, 23, 42, 0.96) !important;
+      backdrop-filter: blur(16px) saturate(180%) !important;
+      -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
+      border: 1px solid rgba(56, 189, 248, 0.4) !important;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.9), 0 0 16px rgba(56, 189, 248, 0.15) !important;
+      border-radius: 8px !important;
+      padding: 12px 16px !important;
+      font-size: 11.5px !important;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif !important;
+      color: #e2e8f0 !important;
       z-index: 2147483647 !important;
       display: none;
       pointer-events: none !important;
-      min-width: 250px !important;
+      min-width: 260px !important;
+      font-variant-numeric: tabular-nums !important;
     }
 
     /* Toast Notification */
     #fg-toast {
       position: fixed !important;
-      bottom: 46px !important;
+      bottom: 48px !important;
       right: 18px !important;
-      background: #161b22 !important;
-      border: 1px solid #30363d !important;
-      color: #f0f6fc !important;
+      background: rgba(15, 23, 42, 0.95) !important;
+      backdrop-filter: blur(12px) !important;
+      -webkit-backdrop-filter: blur(12px) !important;
+      border: 1px solid rgba(255, 255, 255, 0.12) !important;
+      color: #f8fafc !important;
       padding: 8px 14px !important;
       border-radius: 6px !important;
       font-size: 11px !important;
-      font-family: inherit !important;
+      font-weight: 500 !important;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
       z-index: 2147483647 !important;
-      box-shadow: 0 4px 16px rgba(0,0,0,0.8) !important;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.7) !important;
       display: none;
       align-items: center !important;
       gap: 8px !important;
@@ -770,6 +843,21 @@
         : ((curr - entry) / entry) * 100;
     }
     return 0;
+  }
+
+  // Sort open positions from highest profit to highest loss
+  function sortPositions(positions) {
+    if (!positions || !Array.isArray(positions)) return [];
+    return [...positions].sort((a, b) => {
+      const pnlA = Number(a.unrealized_pnl) || 0;
+      const pnlB = Number(b.unrealized_pnl) || 0;
+      if (pnlB !== pnlA) {
+        return pnlB - pnlA; // Highest profit first, down to largest loss
+      }
+      const pctA = getPositionPct(a);
+      const pctB = getPositionPct(b);
+      return pctB - pctA;
+    });
   }
 
   // Show Toast
@@ -1224,10 +1312,12 @@
           previousPrices[key] = curr;
         });
 
-        activePositions = positions;
+        // Always sort positions from highest profit to highest loss
+        activePositions = sortPositions(positions);
         renderPositionsTicker(flashMap);
       }
     } else if (activePositions.length > 0) {
+      activePositions = sortPositions(activePositions);
       renderPositionsTicker({});
     }
 
@@ -1311,7 +1401,9 @@
       return;
     }
 
-    track.innerHTML = activePositions.map((pos) => {
+    const sortedPositions = sortPositions(activePositions);
+
+    track.innerHTML = sortedPositions.map((pos) => {
       const key = pos.trade_id || pos.symbol;
       const isBuy = pos.side === "BUY";
       const pnl = Number(pos.unrealized_pnl) || 0;
@@ -1467,6 +1559,8 @@
       return;
     }
 
+    const sortedPositions = sortPositions(activePositions);
+
     wrap.innerHTML = `
       <table class="fg-positions-table">
         <thead>
@@ -1485,7 +1579,7 @@
           </tr>
         </thead>
         <tbody>
-          ${activePositions.map((pos) => {
+          ${sortedPositions.map((pos) => {
             const isBuy = pos.side === "BUY";
             const pnl = Number(pos.unrealized_pnl) || 0;
             const isProfit = pnl > 0;
