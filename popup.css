@@ -27,7 +27,7 @@
 }
 
 body {
-  width: 380px;
+  width: 415px;
   min-height: 540px;
   background: var(--bg-main);
   color: var(--text-muted);
@@ -35,6 +35,25 @@ body {
   font-size: 13px;
   line-height: 1.4;
   user-select: none;
+}
+
+/* Custom Sleek Scrollbar */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(13, 17, 23, 0.6);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(56, 189, 248, 0.45);
 }
 
 /* Header */
@@ -827,22 +846,117 @@ input:checked + .slider:before {
   color: var(--text-dim);
 }
 
+.daily-profile-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 6px;
+  margin-bottom: 4px;
+}
+
 .daily-user-tag {
   color: var(--cyan);
-  font-weight: 600;
+  font-weight: 700;
+  font-size: 11px;
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  white-space: nowrap;
 }
 
-.daily-trades-tag {
+.daily-status-tag {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  text-transform: uppercase;
+}
+
+.daily-status-tag.tag-profit {
+  background: rgba(63, 185, 80, 0.15);
+  color: var(--green);
+}
+
+.daily-status-tag.tag-loss {
+  background: rgba(248, 81, 73, 0.15);
+  color: var(--red);
+}
+
+.daily-status-tag.tag-neutral {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-dim);
+}
+
+/* Modern Segmented Metrics Grid for Zero Wrapping */
+.daily-metrics-bar {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 4px;
+  background: rgba(13, 17, 23, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+  padding: 6px 4px;
+  margin-top: 5px;
+}
+
+.metric-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.chip-label {
+  font-size: 7.5px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 2px;
+  white-space: nowrap;
+}
+
+.chip-val {
+  font-size: 11px;
+  font-weight: 800;
+  font-family: var(--font-mono);
+  color: var(--text-main);
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.chip-val.val-win { color: #3fb950; }
+.chip-val.val-loss { color: #f85149; }
+.chip-val.val-rate { color: #38bdf8; }
+.chip-val.val-open { color: #e3b341; }
+
+/* Sub header & Breakdown for ALL PROFILES view */
+.daily-item-sub {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 10.5px;
+  color: var(--text-dim);
+  margin-top: 6px;
+  margin-bottom: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.daily-sub-traders {
+  color: #a78bfa;
+  font-weight: 700;
+}
+
+.daily-sub-trades {
   color: var(--text-muted);
+  font-weight: 600;
 }
 
 .daily-users-breakdown {
-  margin-top: 8px;
-  padding-top: 6px;
-  border-top: 1px dashed var(--border);
+  margin-top: 4px;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -852,10 +966,27 @@ input:checked + .slider:before {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  font-size: 10.5px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: rgba(13, 17, 23, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.user-row-name {
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.user-row-trades {
   font-size: 10px;
-  padding: 2px 4px;
-  border-radius: 3px;
-  background: rgba(0, 0, 0, 0.2);
+  color: var(--text-dim);
+}
+
+.user-row-pnl {
+  font-family: var(--font-mono);
+  font-weight: 800;
+  font-size: 11px;
 }
 
 /* Google Sheet Sync & Export Styles */

@@ -288,26 +288,88 @@ function updateMarketStatusIndicator(isOpenFromServer) {
   }
 }
 
-// Compute Day-to-Day P&L Summary & Records for a specific trader profile (Profile-by-Profile only)
+// Compute Day-to-Day P&L Summary & Records for a specific trader profile or ALL active profiles
 function computeDailyPnlSummary(historyByUser, targetUser) {
-  if (!targetUser || targetUser === "ALL") {
-    const availableUsers = Object.keys(historyByUser || {});
-    targetUser = currentProfile || availableUsers[0] || "";
-  }
+  let records = [];
 
-  const userDays = (historyByUser && historyByUser[targetUser]) || {};
-  const records = Object.values(userDays)
-    .filter(d => {
-      if (!d || d.isReal === false) return false;
-      const trades = Number(d.tradesCount) || 0;
-      const pnl = Number(d.totalPnl) || 0;
-      const realized = Number(d.realizedPnl) || 0;
-      return trades > 0 || pnl !== 0 || realized !== 0;
-    })
-    .map(d => ({
-      ...d,
-      user: targetUser
-    }));
+  if (targetUser === "ALL") {
+    const dateMap = {};
+    for (const [user, userDays] of Object.entries(historyByUser || {})) {
+      for (const [dateKey, dayData] of Object.entries(userDays || {})) {
+        if (!dayData || dayData.isReal === false) continue;
+        const pnl = Number(dayData.totalPnl) || 0;
+        const trades = Number(dayData.tradesCount) || 0;
+        const realized = Number(dayData.realizedPnl) || 0;
+        if (trades === 0 && pnl === 0 && realized === 0) continue;
+
+        if (!dateMap[dateKey]) {
+          dateMap[dateKey] = {
+            date: dateKey,
+            displayDate: dayData.displayDate || dateKey,
+            dayName: dayData.dayName || "",
+            totalPnl: 0,
+            realizedPnl: 0,
+            unrealizedPnl: 0,
+            tradesCount: 0,
+            winningTrades: 0,
+            losingTrades: 0,
+            openPositionsCount: 0,
+            winningUsers: 0,
+            losingUsers: 0,
+            userBreakdown: []
+          };
+        }
+
+        dateMap[dateKey].totalPnl += pnl;
+        dateMap[dateKey].realizedPnl += realized;
+        dateMap[dateKey].unrealizedPnl += Number(dayData.unrealizedPnl) || 0;
+        dateMap[dateKey].tradesCount += trades;
+        dateMap[dateKey].winningTrades += Number(dayData.winningTrades) || 0;
+        dateMap[dateKey].losingTrades += Number(dayData.losingTrades) || 0;
+        dateMap[dateKey].openPositionsCount += Number(dayData.openPositionsCount) || 0;
+
+        if (pnl > 0) dateMap[dateKey].winningUsers++;
+        else if (pnl < 0) dateMap[dateKey].losingUsers++;
+
+        dateMap[dateKey].userBreakdown.push({
+          user: user,
+          pnl: pnl,
+          tradesCount: trades,
+          winningTrades: Number(dayData.winningTrades) || 0,
+          losingTrades: Number(dayData.losingTrades) || 0,
+          winRate: Number(dayData.winRate) || 0,
+          status: dayData.status || (pnl >= 0 ? "PROFIT" : "LOSS")
+        });
+      }
+    }
+
+    // Sort breakdown within each day by P&L descending
+    for (const d of Object.values(dateMap)) {
+      d.userBreakdown.sort((a, b) => b.pnl - a.pnl);
+      const totalDecided = d.winningTrades + d.losingTrades;
+      d.winRate = totalDecided > 0 ? (d.winningTrades / totalDecided) * 100 : 0;
+    }
+    records = Object.values(dateMap);
+  } else {
+    if (!targetUser) {
+      const availableUsers = Object.keys(historyByUser || {});
+      targetUser = currentProfile || availableUsers[0] || "";
+    }
+
+    const userDays = (historyByUser && historyByUser[targetUser]) || {};
+    records = Object.values(userDays)
+      .filter(d => {
+        if (!d || d.isReal === false) return false;
+        const trades = Number(d.tradesCount) || 0;
+        const pnl = Number(d.totalPnl) || 0;
+        const realized = Number(d.realizedPnl) || 0;
+        return trades > 0 || pnl !== 0 || realized !== 0;
+      })
+      .map(d => ({
+        ...d,
+        user: targetUser
+      }));
+  }
 
   // Sort descending by date (newest session first)
   records.sort((a, b) => b.date.localeCompare(a.date));
@@ -360,7 +422,7 @@ function computeDailyPnlSummary(historyByUser, targetUser) {
   };
 }
 
-// Render Day-to-Day Profit & Loss View (Strictly Profile-by-Profile)
+// Render Day-to-Day Profit & Loss View (Supporting both ALL Active Profiles and Individual Profile)
 function renderDailyPnlView() {
   const cleanHistory = filterRealHistory(cachedDailyHistory);
   cachedDailyHistory = cleanHistory;
@@ -385,19 +447,20 @@ function renderDailyPnlView() {
     });
 
     const userList = Array.from(userSet).sort();
-    if (!selectedDailyUser || selectedDailyUser === "ALL" || !userSet.has(selectedDailyUser)) {
-      selectedDailyUser = currentProfile || userList[0] || "";
+    if (!selectedDailyUser || (!userSet.has(selectedDailyUser) && selectedDailyUser !== "ALL")) {
+      selectedDailyUser = currentProfile || userList[0] || "ALL";
     }
 
-    if (userList.length > 0) {
-      selDailyUser.innerHTML = userList.map(u => 
-        `<option value="${u}" ${selectedDailyUser === u ? "selected" : ""}>👤 ${u}</option>`
-      ).join("");
-      selDailyUser.value = selectedDailyUser;
-    }
+    let optionsHtml = `<option value="ALL" ${selectedDailyUser === "ALL" ? "selected" : ""}>👥 All Active Profiles</option>`;
+    optionsHtml += userList.map(u => 
+      `<option value="${u}" ${selectedDailyUser === u ? "selected" : ""}>👤 ${u}</option>`
+    ).join("");
+
+    selDailyUser.innerHTML = optionsHtml;
+    selDailyUser.value = selectedDailyUser;
   }
 
-  // 2. Compute Summary Metrics for the Selected Profile
+  // 2. Compute Summary Metrics for the Selected Profile / All Profiles
   const summary = computeDailyPnlSummary(historyByUser, selectedDailyUser);
 
   const profitEl = document.getElementById("dailyTotalProfit");
@@ -437,11 +500,13 @@ function renderDailyPnlView() {
   const listContainer = document.getElementById("dailyPnlList");
   if (!listContainer) return;
 
+  const isAllView = selectedDailyUser === "ALL";
+
   if (summary.records.length === 0) {
     listContainer.innerHTML = `
       <div class="empty-state">
         <div class="empty-icon">📅</div>
-        <div class="empty-text">No real trading history logged yet for <strong>${selectedDailyUser || "this profile"}</strong></div>
+        <div class="empty-text">No real trading history logged yet for <strong>${isAllView ? "active profiles" : (selectedDailyUser || "this profile")}</strong></div>
       </div>
     `;
     return;
@@ -463,8 +528,7 @@ function renderDailyPnlView() {
     const rowClass = isProfit ? "is-profit" : (isLoss ? "is-loss" : "is-breakeven");
     const pillClass = isProfit ? "pill-profit" : (isLoss ? "pill-loss" : "pill-neutral");
     const pnlSign = isProfit ? "+" : "";
-    const userLabel = `👤 ${selectedDailyUser || r.user}`;
-    
+
     // Dynamic trade statistics breakdown
     const trades = Number(r.tradesCount) || 0;
     const wins = Number(r.winningTrades) || 0;
@@ -472,14 +536,48 @@ function renderDailyPnlView() {
     const openPos = Number(r.openPositionsCount) || 0;
     const wr = Number(r.winRate) || ((wins + losses) > 0 ? (wins / (wins + losses)) * 100 : 0);
 
-    let tradesText = `${trades} trade${trades === 1 ? "" : "s"}`;
-    if (wins > 0 || losses > 0) {
-      tradesText = `${trades} trades (${wins}W / ${losses}L • ${wr.toFixed(1)}% WR)`;
-    }
-    if (openPos > 0) {
-      tradesText += ` • ${openPos} Open`;
+    // If viewing ALL profiles, display the multi-trader breakdown list (Image 2 style)
+    if (isAllView && Array.isArray(r.userBreakdown)) {
+      return `
+        <div class="daily-pnl-item ${rowClass}">
+          <div class="daily-item-top">
+            <div class="daily-date-group">
+              <span class="daily-date-title">${r.displayDate || r.date}</span>
+              <span class="daily-day-badge">${r.dayName || ""}</span>
+              ${isToday ? `<span class="daily-today-badge">Today</span>` : ""}
+            </div>
+            <span class="daily-pnl-pill ${pillClass}">
+              ${pnlSign}${formatInr(pnl)}
+            </span>
+          </div>
+
+          <div class="daily-item-sub">
+            <span class="daily-sub-traders">👥 ${r.userBreakdown.length} Trader${r.userBreakdown.length === 1 ? "" : "s"} (${r.winningUsers || 0}W / ${r.losingUsers || 0}L)</span>
+            <span class="daily-sub-trades">📊 ${trades} trades</span>
+          </div>
+
+          <div class="daily-users-breakdown">
+            ${r.userBreakdown.map((u) => {
+              const uProfit = u.pnl > 0;
+              const uLoss = u.pnl < 0;
+              const uSign = uProfit ? "+" : "";
+              const uColorClass = uProfit ? "val-green" : (uLoss ? "val-red" : "");
+              return `
+                <div class="daily-user-breakdown-row">
+                  <span class="user-row-name">👤 ${u.user}</span>
+                  <span class="user-row-trades">${u.tradesCount} trade${u.tradesCount === 1 ? "" : "s"}</span>
+                  <span class="user-row-pnl ${uColorClass}">
+                    ${uSign}${formatInr(u.pnl)}
+                  </span>
+                </div>
+              `;
+            }).join("")}
+          </div>
+        </div>
+      `;
     }
 
+    // Single Profile View: Sleek Segmented Metrics Grid (ZERO text wrapping)
     return `
       <div class="daily-pnl-item ${rowClass}">
         <div class="daily-item-top">
@@ -493,9 +591,32 @@ function renderDailyPnlView() {
           </span>
         </div>
 
-        <div class="daily-item-bottom">
-          <span class="daily-user-tag">${userLabel}</span>
-          <span class="daily-trades-tag" title="${wins} Wins, ${losses} Losses, ${openPos} Open Positions">📊 ${tradesText}</span>
+        <div class="daily-profile-row">
+          <span class="daily-user-tag">👤 ${selectedDailyUser || r.user}</span>
+          <span class="daily-status-tag ${isProfit ? "tag-profit" : (isLoss ? "tag-loss" : "tag-neutral")}">${r.status || (isProfit ? "PROFIT" : (isLoss ? "LOSS" : "BREAKEVEN"))}</span>
+        </div>
+
+        <div class="daily-metrics-bar">
+          <div class="metric-chip" title="Total trades executed">
+            <span class="chip-label">TRADES</span>
+            <span class="chip-val">${trades}</span>
+          </div>
+          <div class="metric-chip" title="Winning trades">
+            <span class="chip-label">WIN</span>
+            <span class="chip-val val-win">${wins}</span>
+          </div>
+          <div class="metric-chip" title="Losing trades">
+            <span class="chip-label">LOSS</span>
+            <span class="chip-val val-loss">${losses}</span>
+          </div>
+          <div class="metric-chip" title="Session win rate percentage">
+            <span class="chip-label">WIN RATE</span>
+            <span class="chip-val val-rate">${wr.toFixed(1)}%</span>
+          </div>
+          <div class="metric-chip" title="Currently open positions">
+            <span class="chip-label">OPEN</span>
+            <span class="chip-val val-open">${openPos}</span>
+          </div>
         </div>
       </div>
     `;

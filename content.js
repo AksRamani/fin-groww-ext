@@ -713,6 +713,61 @@
       font-variant-numeric: tabular-nums !important;
     }
 
+    .fg-daily-metrics-bar {
+      display: grid !important;
+      grid-template-columns: repeat(5, 1fr) !important;
+      gap: 6px !important;
+      background: rgba(13, 17, 23, 0.75) !important;
+      border: 1px solid rgba(255, 255, 255, 0.08) !important;
+      border-radius: 6px !important;
+      padding: 6px 4px !important;
+      margin-top: 6px !important;
+    }
+
+    .fg-metric-chip {
+      display: flex !important;
+      flex-direction: column !important;
+      align-items: center !important;
+      justify-content: center !important;
+      text-align: center !important;
+    }
+
+    .fg-chip-label {
+      font-size: 8px !important;
+      font-weight: 700 !important;
+      letter-spacing: 0.4px !important;
+      text-transform: uppercase !important;
+      color: #94a3b8 !important;
+      margin-bottom: 2px !important;
+      white-space: nowrap !important;
+    }
+
+    .fg-chip-val {
+      font-size: 11.5px !important;
+      font-weight: 800 !important;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+      color: #f8fafc !important;
+      line-height: 1.2 !important;
+      white-space: nowrap !important;
+    }
+
+    .fg-chip-val.val-win { color: #22c55e !important; }
+    .fg-chip-val.val-loss { color: #ef4444 !important; }
+    .fg-chip-val.val-rate { color: #38bdf8 !important; }
+    .fg-chip-val.val-open { color: #eab308 !important; }
+
+    .fg-daily-sub-bar {
+      display: flex !important;
+      justify-content: space-between !important;
+      align-items: center !important;
+      font-size: 11px !important;
+      color: #94a3b8 !important;
+      margin-top: 6px !important;
+      margin-bottom: 6px !important;
+      padding-bottom: 4px !important;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
+    }
+
     .fg-drawer-title {
       font-weight: 700 !important;
       font-size: 13px !important;
@@ -1649,16 +1704,16 @@
       });
 
       const userList = Array.from(userSet).sort();
-      if (!drawerDailyUser || drawerDailyUser === "ALL" || !userSet.has(drawerDailyUser)) {
-        drawerDailyUser = currentProfile || userList[0] || "";
+      if (!drawerDailyUser || (!userSet.has(drawerDailyUser) && drawerDailyUser !== "ALL")) {
+        drawerDailyUser = currentProfile || userList[0] || "ALL";
       }
 
-      if (userList.length > 0) {
-        dailyUserSel.innerHTML = userList.map(u => 
-          `<option value="${u}" ${drawerDailyUser === u ? "selected" : ""}>👤 ${u}</option>`
-        ).join("");
-        dailyUserSel.value = drawerDailyUser;
-      }
+      let optionsHtml = `<option value="ALL" ${drawerDailyUser === "ALL" ? "selected" : ""}>👥 All Active Profiles</option>`;
+      optionsHtml += userList.map(u => 
+        `<option value="${u}" ${drawerDailyUser === u ? "selected" : ""}>👤 ${u}</option>`
+      ).join("");
+      dailyUserSel.innerHTML = optionsHtml;
+      dailyUserSel.value = drawerDailyUser;
     }
   }
 
@@ -1944,26 +1999,87 @@
     });
   }
 
-  // Compute Day-to-Day P&L Summary & Records for a specific trader profile (Profile-by-Profile only)
+  // Compute Day-to-Day P&L Summary & Records for a specific trader profile or ALL active profiles
   function computeDailyPnlSummary(historyByUser, targetUser) {
-    if (!targetUser || targetUser === "ALL") {
-      const availableUsers = Object.keys(historyByUser || {});
-      targetUser = currentProfile || availableUsers[0] || "";
-    }
+    let records = [];
 
-    const userDays = (historyByUser && historyByUser[targetUser]) || {};
-    const records = Object.values(userDays)
-      .filter(d => {
-        if (!d || d.isReal === false) return false;
-        const trades = Number(d.tradesCount) || 0;
-        const pnl = Number(d.totalPnl) || 0;
-        const realized = Number(d.realizedPnl) || 0;
-        return trades > 0 || pnl !== 0 || realized !== 0;
-      })
-      .map(d => ({
-        ...d,
-        user: targetUser
-      }));
+    if (targetUser === "ALL") {
+      const dateMap = {};
+      for (const [user, userDays] of Object.entries(historyByUser || {})) {
+        for (const [dateKey, dayData] of Object.entries(userDays || {})) {
+          if (!dayData || dayData.isReal === false) continue;
+          const pnl = Number(dayData.totalPnl) || 0;
+          const trades = Number(dayData.tradesCount) || 0;
+          const realized = Number(dayData.realizedPnl) || 0;
+          if (trades === 0 && pnl === 0 && realized === 0) continue;
+
+          if (!dateMap[dateKey]) {
+            dateMap[dateKey] = {
+              date: dateKey,
+              displayDate: dayData.displayDate || dateKey,
+              dayName: dayData.dayName || "",
+              totalPnl: 0,
+              realizedPnl: 0,
+              unrealizedPnl: 0,
+              tradesCount: 0,
+              winningTrades: 0,
+              losingTrades: 0,
+              openPositionsCount: 0,
+              winningUsers: 0,
+              losingUsers: 0,
+              userBreakdown: []
+            };
+          }
+
+          dateMap[dateKey].totalPnl += pnl;
+          dateMap[dateKey].realizedPnl += realized;
+          dateMap[dateKey].unrealizedPnl += Number(dayData.unrealizedPnl) || 0;
+          dateMap[dateKey].tradesCount += trades;
+          dateMap[dateKey].winningTrades += Number(dayData.winningTrades) || 0;
+          dateMap[dateKey].losingTrades += Number(dayData.losingTrades) || 0;
+          dateMap[dateKey].openPositionsCount += Number(dayData.openPositionsCount) || 0;
+
+          if (pnl > 0) dateMap[dateKey].winningUsers++;
+          else if (pnl < 0) dateMap[dateKey].losingUsers++;
+
+          dateMap[dateKey].userBreakdown.push({
+            user: user,
+            pnl: pnl,
+            tradesCount: trades,
+            winningTrades: Number(dayData.winningTrades) || 0,
+            losingTrades: Number(dayData.losingTrades) || 0,
+            winRate: Number(dayData.winRate) || 0,
+            status: dayData.status || (pnl >= 0 ? "PROFIT" : "LOSS")
+          });
+        }
+      }
+
+      for (const d of Object.values(dateMap)) {
+        d.userBreakdown.sort((a, b) => b.pnl - a.pnl);
+        const totalDecided = d.winningTrades + d.losingTrades;
+        d.winRate = totalDecided > 0 ? (d.winningTrades / totalDecided) * 100 : 0;
+      }
+      records = Object.values(dateMap);
+    } else {
+      if (!targetUser) {
+        const availableUsers = Object.keys(historyByUser || {});
+        targetUser = currentProfile || availableUsers[0] || "";
+      }
+
+      const userDays = (historyByUser && historyByUser[targetUser]) || {};
+      records = Object.values(userDays)
+        .filter(d => {
+          if (!d || d.isReal === false) return false;
+          const trades = Number(d.tradesCount) || 0;
+          const pnl = Number(d.totalPnl) || 0;
+          const realized = Number(d.realizedPnl) || 0;
+          return trades > 0 || pnl !== 0 || realized !== 0;
+        })
+        .map(d => ({
+          ...d,
+          user: targetUser
+        }));
+    }
 
     records.sort((a, b) => b.date.localeCompare(a.date));
 
@@ -2015,7 +2131,7 @@
     };
   }
 
-  // Render Day-to-Day Profit & Loss Tab in the Drawer (Strictly Profile-by-Profile)
+  // Render Day-to-Day Profit & Loss Tab in the Drawer
   function renderDrawerDailyPnl() {
     const wrap = shadowRoot?.getElementById("fg-drawer-daily-wrap");
     if (!wrap) return;
@@ -2024,9 +2140,8 @@
     cachedDailyHistory = cleanHistory;
     const historyByUser = cleanHistory?.byUser || {};
 
-    if (!drawerDailyUser || drawerDailyUser === "ALL") {
-      const availableUsers = Object.keys(historyByUser);
-      drawerDailyUser = currentProfile || availableUsers[0] || "";
+    if (!drawerDailyUser || (!historyByUser[drawerDailyUser] && drawerDailyUser !== "ALL")) {
+      drawerDailyUser = currentProfile || "ALL";
     }
 
     const summary = computeDailyPnlSummary(historyByUser, drawerDailyUser);
@@ -2043,6 +2158,8 @@
     const winRateStr = (summary.totalWinsSum > 0 || summary.totalLossesSum > 0)
       ? `${summary.overallWinRate.toFixed(1)}% (${summary.totalWinsSum}W - ${summary.totalLossesSum}L)`
       : `${summary.overallWinRate.toFixed(1)}%`;
+
+    const isAll = drawerDailyUser === "ALL";
 
     wrap.innerHTML = `
       <div class="fg-drawer-daily-bar">
@@ -2066,14 +2183,14 @@
           </div>
         </div>
         <div style="font-size:11px;color:#94a3b8;font-weight:600;">
-          Showing: <span style="color:#38bdf8;">👤 ${drawerDailyUser}</span> • ${summary.totalTradingDays} Days Logged
+          Showing: <span style="color:#38bdf8;">${isAll ? "👥 All Active Profiles" : `👤 ${drawerDailyUser}`}</span> • ${summary.totalTradingDays} Days Logged
         </div>
       </div>
       <div class="fg-drawer-daily-container">
         ${summary.records.length === 0 ? `
           <div style="padding:28px 20px;text-align:center;color:#8b949e;">
             <div style="font-size:13px;font-weight:700;color:#c9d1d9;">No Real Day-to-Day Records Found</div>
-            <div style="font-size:11px;margin-top:4px;">No trading activity logged yet for <strong>${drawerDailyUser}</strong>.</div>
+            <div style="font-size:11px;margin-top:4px;">No trading activity logged yet for <strong>${isAll ? "active profiles" : drawerDailyUser}</strong>.</div>
           </div>
         ` : summary.records.map((r) => {
           const pnl = Number(r.totalPnl) || 0;
@@ -2090,6 +2207,44 @@
           const openPos = Number(r.openPositionsCount) || 0;
           const wr = Number(r.winRate) || ((wins + losses) > 0 ? (wins / (wins + losses)) * 100 : 0);
 
+          if (isAll && Array.isArray(r.userBreakdown)) {
+            return `
+              <div class="fg-daily-card ${cardClass}">
+                <div class="fg-daily-row-top">
+                  <div style="display:flex;align-items:center;gap:8px;">
+                    <span style="font-weight:800;color:#f8fafc;font-size:12.5px;">${r.displayDate}</span>
+                    <span style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px;background:rgba(255,255,255,0.08);color:#94a3b8;">${r.dayName}</span>
+                    ${isToday ? `<span style="font-size:10px;font-weight:800;padding:1px 6px;border-radius:4px;background:rgba(56,189,248,0.2);color:#38bdf8;">TODAY</span>` : ""}
+                  </div>
+                  <div>
+                    <span class="fg-tbl-pill ${pillClass}" style="font-size:12px;font-weight:800;padding:3px 8px;">
+                      ${pnlSign}${formatInr(pnl)}
+                    </span>
+                  </div>
+                </div>
+                <div class="fg-daily-sub-bar">
+                  <span style="color:#a78bfa;font-weight:700;">👥 ${r.userBreakdown.length} Active Trader${r.userBreakdown.length === 1 ? "" : "s"} (${r.winningUsers || 0}W / ${r.losingUsers || 0}L)</span>
+                  <span style="color:#94a3b8;font-weight:600;">📊 ${trades} trades</span>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:4px;margin-top:4px;">
+                  ${r.userBreakdown.map((u) => {
+                    const uProfit = u.pnl > 0;
+                    const uLoss = u.pnl < 0;
+                    const uSign = uProfit ? "+" : "";
+                    const uColor = uProfit ? "#22c55e" : (uLoss ? "#ef4444" : "#94a3b8");
+                    return `
+                      <div style="display:flex;justify-content:space-between;align-items:center;background:rgba(13,17,23,0.5);border:1px solid rgba(255,255,255,0.04);border-radius:4px;padding:3px 8px;font-size:11px;">
+                        <span style="font-weight:700;color:#f8fafc;">👤 ${u.user}</span>
+                        <span style="font-size:10px;color:#94a3b8;">${u.tradesCount} trade${u.tradesCount === 1 ? "" : "s"}</span>
+                        <span style="font-family:monospace;font-weight:800;color:${uColor};">${uSign}${formatInr(u.pnl)}</span>
+                      </div>
+                    `;
+                  }).join("")}
+                </div>
+              </div>
+            `;
+          }
+
           return `
             <div class="fg-daily-card ${cardClass}">
               <div class="fg-daily-row-top">
@@ -2104,12 +2259,32 @@
                   </span>
                 </div>
               </div>
-              <div class="fg-daily-row-bottom">
-                <div>
-                  <span>👤 Trader: <strong style="color:#38bdf8;">${r.user}</strong> • Status: <strong style="color:#e2e8f0;">${r.status || "RUNNING"}</strong></span>
+
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;margin-bottom:4px;">
+                <span style="color:#38bdf8;font-weight:700;font-size:11px;">👤 ${r.user || drawerDailyUser}</span>
+                <span style="font-size:9.5px;font-weight:800;letter-spacing:0.4px;padding:1px 6px;border-radius:3px;text-transform:uppercase;background:rgba(255,255,255,0.08);color:${isProfit ? '#22c55e' : (isLoss ? '#ef4444' : '#94a3b8')}">${r.status || (isProfit ? 'PROFIT' : (isLoss ? 'LOSS' : 'BREAKEVEN'))}</span>
+              </div>
+
+              <div class="fg-daily-metrics-bar">
+                <div class="fg-metric-chip" title="Total trades executed">
+                  <span class="fg-chip-label">TRADES</span>
+                  <span class="fg-chip-val">${trades}</span>
                 </div>
-                <div>
-                  <span>Trades Executed: <strong style="color:#e2e8f0;">${trades}</strong>${(wins > 0 || losses > 0) ? ` (${wins}W / ${losses}L • ${wr.toFixed(1)}% WR)` : ""}${openPos > 0 ? ` • <strong style="color:#38bdf8;">${openPos} Open</strong>` : ""}</span>
+                <div class="fg-metric-chip" title="Winning trades">
+                  <span class="fg-chip-label">WIN</span>
+                  <span class="fg-chip-val val-win">${wins}</span>
+                </div>
+                <div class="fg-metric-chip" title="Losing trades">
+                  <span class="fg-chip-label">LOSS</span>
+                  <span class="fg-chip-val val-loss">${losses}</span>
+                </div>
+                <div class="fg-metric-chip" title="Session win rate percentage">
+                  <span class="fg-chip-label">WIN RATE</span>
+                  <span class="fg-chip-val val-rate">${wr.toFixed(1)}%</span>
+                </div>
+                <div class="fg-metric-chip" title="Currently open positions">
+                  <span class="fg-chip-label">OPEN</span>
+                  <span class="fg-chip-val val-open">${openPos}</span>
                 </div>
               </div>
             </div>

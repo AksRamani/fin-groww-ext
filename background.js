@@ -593,11 +593,12 @@ async function syncDailyPnlToGoogleSheet(options = {}) {
     };
   } catch (err) {
     console.error("[FinGroww Background] Google Sheet sync error:", err);
+    const errText = err?.message || "Sync failed. Check Google Apps Script URL.";
     await chrome.storage.local.set({
       fg_gsheet_last_sync_status: "ERROR",
-      fg_gsheet_last_sync_msg: err.message
+      fg_gsheet_last_sync_msg: errText
     });
-    return { success: false, error: err.message };
+    return { success: false, error: errText };
   }
 }
 
