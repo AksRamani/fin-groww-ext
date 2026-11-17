@@ -51,7 +51,32 @@ A high-frequency Chrome extension (Manifest V3) that docks a professional tradin
   - Open the extension toolbar popup to view the live market status (`🟢 Open` / `🔴 Closed`).
   - Toggle **"Show Bar & Pill After Market Closes"** to keep the bar and pill visible after market hours for reviewing past trades and analytics.
 
-### 6. Real-Time Synchronization & Stale-While-Revalidate Engine
+### 6. Day-to-Day Profit & Loss Storage & User-Wise Analytics
+- **Multi-Day P&L Persistence**: Persistently records daily profit and loss for every active trader profile in Chrome's local storage (`chrome.storage.local`).
+- **Aggregated & Individual Breakdown**:
+  - **`👥 All Active Users (Combined)`**: Computes platform-wide daily totals, win rates, and shows a detailed badge breakdown of each active trader's daily P&L.
+  - **`👤 Individual User Selection`**: Isolates any specific trader (`Aks-new-55k`, `Alpha-Scalper-01`, etc.) to review their personal trading days, trade counts, and results.
+- **Summary KPI Cards**:
+  - **Total Profit**: Sum of all winning day profits ($\sum_{pnl > 0} pnl$) with count of winning days.
+  - **Total Loss**: Sum of all losing day losses ($\sum_{pnl < 0} |pnl|$) with count of losing days.
+  - **Net Total P&L**: $\text{Total Profit} - \text{Total Loss}$ (color-coded in emerald green / red).
+  - **Win Rate %**: Calculated win percentage (`winDays / totalDays * 100`).
+- **Dual-Surface Availability**:
+  - Available inside the extension popup under the **📅 Day-to-Day P&L** tab.
+  - Available inside the in-page bottom status bar drawer under the **📅 Day-to-Day P&L** tab.
+
+### 7. Google Sheets End-of-Day Auto-Sync & CSV Export (Option A: Master Ledger)
+- **Automatic Sync at Market Close (3:30 PM IST)**: The background worker detects the 3:30 PM IST market close transition and automatically compiles and posts the day's finalized ledger to your Google Sheet without manual action.
+- **Option A Master Ledger Structure**:
+  - Appends rows chronologically: Date, Day, Time, Trader / Profile, Total P&L (₹), Realized P&L, Unrealized P&L, Account Equity, Trades Count, Status, and Win Rate Notes.
+  - Generates an aggregated `ALL USERS (Combined)` summary row plus individual trader rows.
+  - **Smart Upsert (Zero Duplicates)**: If synced more than once on the same day, the Google Apps Script updates existing rows in place rather than creating duplicate entries.
+- **Popup Controls**:
+  - **⚙️ Config Drawer**: Easily save your Google Apps Script Webhook URL and toggle auto-sync.
+  - **📤 Sync to Sheet Now**: One-click manual sync for immediate export with live progress feedback and automatic CORS/redirect fallback.
+  - **📥 Export CSV**: One-click offline export downloading the complete multi-day ledger as a `.csv` file.
+
+### 8. Real-Time Synchronization & Stale-While-Revalidate Engine
 - **Fast 3-Second State Polling**: Fetches account metrics, active positions, profiles, and running leaderboards every 3 seconds.
 - **10-Second Live Market Quotes Tick**: Runs `POST /api/paper/session/tick` asynchronously during market hours to recalculate NSE live option/equity quotes on the server.
 - **Stale-While-Revalidate Cache**:
@@ -68,7 +93,11 @@ A high-frequency Chrome extension (Manifest V3) that docks a professional tradin
 | :--- | :--- |
 | **`Alt + S`** | Toggle minimize/restore between full bottom bar and floating pill |
 | **`—` Button** | Minimize bottom status bar into the floating pill |
-| **`▲` Button** | Toggle detailed positions drawer table |
+| **`▲` Button** | Toggle detailed positions drawer table & daily P&L |
+| **`⚡ Open Positions` Tab** | View and exit live sorted open trades |
+| **`📅 Day-to-Day P&L` Tab** | View day-to-day profit & loss history and user analytics |
+| **`📤 Sync to Sheet Now`** | Immediately sync day-to-day ledger to Google Sheet |
+| **`📥 Export CSV`** | Download complete historical trading ledger as a CSV file |
 | **`✕ Exit` Button** | Manually exit that specific open trade immediately |
 | **`↻` Button** | Force immediate live sync & NSE market tick |
 | **`⠿` Drag Handle** | Click & drag the minimized pill to reposition anywhere on the screen |
@@ -86,6 +115,11 @@ A high-frequency Chrome extension (Manifest V3) that docks a professional tradin
 
 ---
 
+## 📊 Google Sheets Setup Guide
+See [GOOGLE_SHEET_SETUP.md](GOOGLE_SHEET_SETUP.md) for 1-minute step-by-step instructions and [google_apps_script.js](google_apps_script.js) for the ready-to-paste webhook code.
+
+---
+
 ## 📦 Repository & Project Structure
 
 - **Remote**: `https://github.com/AksRamani/fin-groww-ext.git`
@@ -96,14 +130,16 @@ A high-frequency Chrome extension (Manifest V3) that docks a professional tradin
 
 ```
 D:\fingroww-trading-extension\
-├── manifest.json        # Manifest V3 extension configuration
-├── background.js       # Background service worker (real-time sync, NSE market ticks, caching)
-├── content.js          # Injected Shadow DOM status bar, draggable pill, and ticker
-├── content.css         # Shadow DOM styles (green/red borders, animations, drawer)
-├── popup.html          # Toolbar popup UI with market status and after-hours toggle
-├── popup.js            # Popup controller and settings persistence
-├── popup.css           # Modern dark-theme popup stylesheet
-├── icons/              # Extension icons (16px, 48px, 128px)
-├── .gitignore          # Git ignore rules
-└── README.md           # Documentation
+├── manifest.json            # Manifest V3 extension configuration
+├── background.js           # Background service worker (real-time sync, NSE ticks, daily P&L, auto-sync)
+├── content.js              # Injected Shadow DOM status bar, draggable pill, drawer tabs
+├── content.css             # Shadow DOM styles (green/red borders, animations, drawer)
+├── popup.html              # Toolbar popup UI (Positions tab, Day-to-Day P&L tab, Google Sheet sync)
+├── popup.js                # Popup controller, day-to-day computations, CSV export, Sheet sync
+├── popup.css               # Modern dark-theme popup stylesheet
+├── google_apps_script.js   # Ready-to-paste Google Apps Script webhook code (Option A: Master Ledger)
+├── GOOGLE_SHEET_SETUP.md   # Step-by-step 1-minute Google Sheets deployment guide
+├── icons/                  # Extension icons (16px, 48px, 128px)
+├── .gitignore              # Git ignore rules
+└── README.md               # Comprehensive documentation
 ```
