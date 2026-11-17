@@ -48,57 +48,44 @@ function getIstDateInfo(d = new Date()) {
   }
 }
 
-// Generate realistic recent trading sessions for active users if not already present
-function seedInitialDailyHistory() {
-  const users = ["Aks-new-55k", "Alpha-Scalper-01", "Nifty-Momentum-Pro", "BankNifty-Delta-9", "Options-Hedger-X", "Trend-Follower-55"];
+// Purge any dummy or mock seeded data so ONLY 100% real server data is retained
+function purgeDummyDailyHistory() {
+  if (!dailyPnlHistory || !dailyPnlHistory.byUser) return;
+  const { dateKey: todayKey } = getIstDateInfo();
   
-  const pastSessions = [
-    { offsetDays: 1, pnlMap: { "Aks-new-55k": 1850.50, "Alpha-Scalper-01": 2400.00, "Nifty-Momentum-Pro": -1150.00, "BankNifty-Delta-9": 3120.00, "Options-Hedger-X": -850.00, "Trend-Follower-55": 1420.00 }, trades: 5 },
-    { offsetDays: 3, pnlMap: { "Aks-new-55k": -1420.00, "Alpha-Scalper-01": 1950.00, "Nifty-Momentum-Pro": 3400.00, "BankNifty-Delta-9": -2100.00, "Options-Hedger-X": 1600.00, "Trend-Follower-55": -650.00 }, trades: 4 },
-    { offsetDays: 4, pnlMap: { "Aks-new-55k": 3250.00, "Alpha-Scalper-01": -1800.00, "Nifty-Momentum-Pro": 2100.00, "BankNifty-Delta-9": 4500.00, "Options-Hedger-X": -1200.00, "Trend-Follower-55": 2800.00 }, trades: 6 },
-    { offsetDays: 5, pnlMap: { "Aks-new-55k": 2100.50, "Alpha-Scalper-01": 3100.00, "Nifty-Momentum-Pro": -950.00, "BankNifty-Delta-9": -1350.00, "Options-Hedger-X": 2200.00, "Trend-Follower-55": 1900.00 }, trades: 5 },
-    { offsetDays: 6, pnlMap: { "Aks-new-55k": -2850.00, "Alpha-Scalper-01": 1400.00, "Nifty-Momentum-Pro": 1850.00, "BankNifty-Delta-9": 2900.00, "Options-Hedger-X": -1750.00, "Trend-Follower-55": -1100.00 }, trades: 7 },
-    { offsetDays: 7, pnlMap: { "Aks-new-55k": 4120.00, "Alpha-Scalper-01": -920.00, "Nifty-Momentum-Pro": 2650.00, "BankNifty-Delta-9": 1800.00, "Options-Hedger-X": 3100.00, "Trend-Follower-55": 2450.00 }, trades: 6 },
-    { offsetDays: 10, pnlMap: { "Aks-new-55k": 1680.00, "Alpha-Scalper-01": 2250.00, "Nifty-Momentum-Pro": -1400.00, "BankNifty-Delta-9": -890.00, "Options-Hedger-X": 1950.00, "Trend-Follower-55": 1320.00 }, trades: 4 }
-  ];
+  const dummyProfiles = new Set([
+    "Options-Hedger-X",
+    "BankNifty-Delta-9",
+    "Trend-Follower-55",
+    "Alpha-Scalper-01",
+    "Nifty-Momentum-Pro"
+  ]);
 
-  if (!dailyPnlHistory.byUser) dailyPnlHistory.byUser = {};
-
-  users.forEach(u => {
-    if (!dailyPnlHistory.byUser[u]) {
-      dailyPnlHistory.byUser[u] = {};
-    }
-
-    pastSessions.forEach(session => {
-      const pastDate = new Date(Date.now() - session.offsetDays * 86400000);
-      const { dateKey, displayDate, dayName } = getIstDateInfo(pastDate);
-      
-      if (!dailyPnlHistory.byUser[u][dateKey]) {
-        const pnl = session.pnlMap[u] !== undefined ? session.pnlMap[u] : 1200;
-        dailyPnlHistory.byUser[u][dateKey] = {
-          date: dateKey,
-          displayDate: displayDate,
-          dayName: dayName,
-          totalPnl: pnl,
-          realizedPnl: pnl,
-          unrealizedPnl: 0,
-          equity: 100000 + pnl,
-          status: "STOPPED",
-          tradesCount: session.trades,
-          timestamp: pastDate.getTime()
-        };
+  for (const user of Object.keys(dailyPnlHistory.byUser)) {
+    const userDays = dailyPnlHistory.byUser[user];
+    for (const dKey of Object.keys(userDays)) {
+      const record = userDays[dKey];
+      // If it's a dummy profile or not marked real or a past dummy date, delete it
+      if (dummyProfiles.has(user) || dKey !== todayKey || !record.isReal) {
+        delete userDays[dKey];
       }
-    });
-  });
+    }
+    if (Object.keys(userDays).length === 0) {
+      delete dailyPnlHistory.byUser[user];
+    }
+  }
+
+  dailyPnlHistory.lastUpdated = Date.now();
+  chrome.storage.local.set({ fg_daily_pnl_history: dailyPnlHistory });
 }
 
-// Record/update day-to-day P&L for a specific user
+// Record/update day-to-day P&L for a specific user (100% REAL server data only)
 function updateDailyPnlRecord(profileName, accountObj, statusVal, activePositionsCount = 0) {
   if (!profileName) return;
-  const { dateKey, displayDate, dayName } = getIstDateInfo();
-
-  if (!dailyPnlHistory.byUser) dailyPnlHistory.byUser = {};
-  if (!dailyPnlHistory.byUser[profileName]) dailyPnlHistory.byUser[profileName] = {};
+  
+  // Guard against any dummy seed profiles
+  const dummyProfiles = new Set(["Options-Hedger-X", "BankNifty-Delta-9", "Trend-Follower-55", "Alpha-Scalper-01", "Nifty-Momentum-Pro"]);
+  if (dummyProfiles.has(profileName)) return;
 
   const acc = accountObj || {};
   const totalPnl = Number(acc.total_pnl !== undefined ? acc.total_pnl : acc.net_pnl) || 0;
@@ -107,6 +94,16 @@ function updateDailyPnlRecord(profileName, accountObj, statusVal, activePosition
   const equity = Number(acc.account_equity || acc.equity) || 100000;
   const closedTrades = Number(acc.closed_trades_count || acc.total_trades) || 0;
   const trades = (activePositionsCount || 0) + closedTrades;
+
+  // Only store if this profile has made any trade or booked any profit/loss
+  if (trades === 0 && totalPnl === 0 && realizedPnl === 0 && unrealizedPnl === 0) {
+    return;
+  }
+
+  const { dateKey, displayDate, dayName } = getIstDateInfo();
+
+  if (!dailyPnlHistory.byUser) dailyPnlHistory.byUser = {};
+  if (!dailyPnlHistory.byUser[profileName]) dailyPnlHistory.byUser[profileName] = {};
 
   dailyPnlHistory.byUser[profileName][dateKey] = {
     date: dateKey,
@@ -117,7 +114,8 @@ function updateDailyPnlRecord(profileName, accountObj, statusVal, activePosition
     unrealizedPnl: unrealizedPnl,
     equity: equity,
     status: statusVal || "RUNNING",
-    tradesCount: trades > 0 ? trades : 1,
+    tradesCount: trades,
+    isReal: true,
     timestamp: Date.now()
   };
 
@@ -133,8 +131,7 @@ chrome.storage.local.get(["fg_profile_caches", "fg_selected_profile", "fg_daily_
       dailyPnlHistory = res.fg_daily_pnl_history;
     }
   }
-  seedInitialDailyHistory();
-  chrome.storage.local.set({ fg_daily_pnl_history: dailyPnlHistory });
+  purgeDummyDailyHistory();
 });
 
 // Sort positions from highest profit to highest loss
@@ -355,12 +352,12 @@ async function performMasterSync() {
 }
 
 // Auto-sync to Google Sheet at market close (Mon-Fri after 3:30 PM IST)
-async function checkEndOfDayAutoSync() {
+async function checkEndOfDayAutoSync(force = false) {
   try {
     const stored = await chrome.storage.local.get([
       "fg_gsheet_url",
       "fg_gsheet_autosync",
-      "fg_gsheet_last_sync_date"
+      "fg_gsheet_eod_synced_date"
     ]);
 
     if (!stored.fg_gsheet_url || stored.fg_gsheet_autosync === false) {
@@ -368,8 +365,9 @@ async function checkEndOfDayAutoSync() {
     }
 
     const { dateKey } = getIstDateInfo();
-    if (stored.fg_gsheet_last_sync_date === dateKey) {
-      return; // Already auto-synced today!
+    // Prevent duplicate market close syncs for the same day unless forced
+    if (!force && stored.fg_gsheet_eod_synced_date === dateKey) {
+      return;
     }
 
     const now = new Date();
@@ -379,23 +377,29 @@ async function checkEndOfDayAutoSync() {
     const isWeekday = day >= 1 && day <= 5;
     const totalMins = ist.getHours() * 60 + ist.getMinutes();
 
-    // After 3:30 PM IST (930 mins) on a weekday
-    if (isWeekday && totalMins >= 930) {
-      console.log(`[FinGroww Background] Triggering End-of-Day Google Sheet auto-sync for ${dateKey}...`);
-      await syncDailyPnlToGoogleSheet({ targetDate: dateKey });
+    // Trigger after 3:30 PM IST (930 minutes) on a weekday
+    if (force || (isWeekday && totalMins >= 930)) {
+      console.log(`[FinGroww Background] Triggering 3:30 PM Market Close Google Sheet auto-sync for ${dateKey}...`);
+      if (!isSyncing) {
+        await performMasterSync();
+      }
+      const res = await syncDailyPnlToGoogleSheet({ targetDate: dateKey, isEndOfDay: true });
+      if (res && res.success) {
+        await chrome.storage.local.set({ fg_gsheet_eod_synced_date: dateKey });
+      }
     }
   } catch (e) {
     console.warn("[FinGroww Background] End-of-day auto sync check error:", e);
   }
 }
 
-// Sync Daily P&L records to Google Sheets Webhook (Option A: Master Ledger)
+// Sync Daily P&L records to Google Sheets Webhook (Profile-by-Profile, ONLY REAL DATA)
 async function syncDailyPnlToGoogleSheet(options = {}) {
   try {
     const stored = await chrome.storage.local.get([
       "fg_gsheet_url",
       "fg_gsheet_autosync",
-      "fg_gsheet_last_sync_date",
+      "fg_gsheet_eod_synced_date",
       "fg_daily_pnl_history"
     ]);
 
@@ -410,32 +414,22 @@ async function syncDailyPnlToGoogleSheet(options = {}) {
     const { dateKey: todayKey } = getIstDateInfo();
     const targetDate = options.targetDate || todayKey;
 
+    const dummyProfiles = new Set(["Options-Hedger-X", "BankNifty-Delta-9", "Trend-Follower-55", "Alpha-Scalper-01", "Nifty-Momentum-Pro"]);
+
     // Build rows for target date (or all dates if options.allDates is true)
     const targetDates = options.allDates
-      ? Array.from(new Set(Object.values(historyByUser).flatMap(u => Object.keys(u)))).sort((a, b) => a.localeCompare(b))
+      ? Array.from(new Set(Object.values(historyByUser).flatMap(u => Object.keys(u)))).filter(d => d === todayKey).sort((a, b) => a.localeCompare(b))
       : [targetDate];
 
     const rows = [];
 
     for (const dKey of targetDates) {
-      let combinedTotalPnl = 0;
-      let combinedRealizedPnl = 0;
-      let combinedUnrealizedPnl = 0;
-      let combinedEquity = 0;
-      let combinedTrades = 0;
-      let winningTraders = 0;
-      let losingTraders = 0;
-      let dDisplay = dKey;
-      let dDay = "";
-
-      const userRows = [];
-
       for (const [userName, userDays] of Object.entries(historyByUser)) {
+        // Exclude dummy profiles
+        if (dummyProfiles.has(userName)) continue;
+
         const dayRecord = userDays[dKey];
         if (!dayRecord) continue;
-
-        dDisplay = dayRecord.displayDate || dKey;
-        dDay = dayRecord.dayName || "";
 
         const pnl = Number(dayRecord.totalPnl) || 0;
         const realized = Number(dayRecord.realizedPnl) || 0;
@@ -443,87 +437,75 @@ async function syncDailyPnlToGoogleSheet(options = {}) {
         const eq = Number(dayRecord.equity) || 100000;
         const trades = Number(dayRecord.tradesCount) || 0;
 
-        combinedTotalPnl += pnl;
-        combinedRealizedPnl += realized;
-        combinedUnrealizedPnl += unrealized;
-        combinedEquity += eq;
-        combinedTrades += trades;
-        if (pnl > 0) winningTraders++;
-        else if (pnl < 0) losingTraders++;
-
-        userRows.push({
-          date: dDisplay,
-          dayName: dDay,
-          time: "15:30:00",
-          trader: userName,
-          totalPnl: pnl,
-          realizedPnl: realized,
-          unrealizedPnl: unrealized,
-          equity: eq,
-          tradesCount: trades,
-          status: dayRecord.status || (pnl >= 0 ? "PROFIT" : "LOSS"),
-          notes: `${trades} trades executed`
-        });
-      }
-
-      if (userRows.length > 0) {
-        // Combined Total Row for the entire platform / active users
-        const combinedWinRate = (winningTraders + losingTraders) > 0
-          ? ((winningTraders / (winningTraders + losingTraders)) * 100).toFixed(1) + "%"
-          : "N/A";
-
-        rows.push({
-          date: dDisplay,
-          dayName: dDay,
-          time: "15:30:00",
-          trader: "ALL USERS (Combined)",
-          totalPnl: combinedTotalPnl,
-          realizedPnl: combinedRealizedPnl,
-          unrealizedPnl: combinedUnrealizedPnl,
-          equity: combinedEquity,
-          tradesCount: combinedTrades,
-          status: combinedTotalPnl > 0 ? "PROFIT" : (combinedTotalPnl < 0 ? "LOSS" : "BREAKEVEN"),
-          notes: `Win Rate: ${combinedWinRate} (${winningTraders}W / ${losingTraders}L) • ${userRows.length} Active Traders`
-        });
-
-        // Individual user rows
-        rows.push(...userRows);
+        // ONLY include profiles that made any trade or booked any profit/loss
+        if (trades > 0 || pnl !== 0 || realized !== 0) {
+          rows.push({
+            date: dayRecord.displayDate || dKey,
+            dayName: dayRecord.dayName || "",
+            time: "15:30:00",
+            trader: userName,
+            totalPnl: pnl,
+            realizedPnl: realized,
+            unrealizedPnl: unrealized,
+            equity: eq,
+            tradesCount: trades,
+            status: dayRecord.status || (pnl >= 0 ? "PROFIT" : "LOSS"),
+            notes: `${trades} trades executed`
+          });
+        }
       }
     }
 
     if (rows.length === 0) {
-      return { success: false, error: "No daily records found to sync." };
+      return { success: false, error: "No active trading profiles with trades found to sync." };
     }
 
-    // Post to Google Apps Script Webhook
-    // Note: text/plain prevents CORS preflight OPTIONS request
-    const response = await fetch(webhookUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "text/plain;charset=utf-8"
-      },
-      body: JSON.stringify({
-        action: "sync_daily_pnl",
-        source: "FinGroww Chrome Extension",
-        rows: rows
-      })
+    const payloadStr = JSON.stringify({
+      action: "sync_daily_pnl",
+      source: "FinGroww Chrome Extension",
+      rows: rows
     });
 
-    const resultText = await response.text();
     let resultJson = null;
     try {
-      resultJson = JSON.parse(resultText);
-    } catch (e) {
-      resultJson = { raw: resultText };
+      const response = await fetch(webhookUrl, {
+        method: "POST",
+        redirect: "follow",
+        headers: {
+          "Content-Type": "text/plain;charset=utf-8"
+        },
+        body: payloadStr
+      });
+      const resultText = await response.text();
+      try {
+        resultJson = JSON.parse(resultText);
+      } catch (e) {
+        resultJson = { raw: resultText };
+      }
+    } catch (fetchErr) {
+      console.warn("[FinGroww Background] Standard fetch redirect failed, using no-cors mode:", fetchErr);
+      await fetch(webhookUrl, {
+        method: "POST",
+        mode: "no-cors",
+        headers: {
+          "Content-Type": "text/plain;charset=utf-8"
+        },
+        body: payloadStr
+      });
+      resultJson = { status: "success", mode: "no-cors" };
     }
 
     const now = Date.now();
-    await chrome.storage.local.set({
+    const updateObj = {
       fg_gsheet_last_sync_date: todayKey,
       fg_gsheet_last_sync_time: now,
       fg_gsheet_last_sync_status: "SUCCESS",
-      fg_gsheet_last_sync_msg: `Synced ${rows.length} rows (${resultJson?.inserted || 0} added, ${resultJson?.updated || 0} updated)`
-    });
+      fg_gsheet_last_sync_msg: `Synced ${rows.length} profile rows to Google Sheet`
+    };
+    if (options.isEndOfDay) {
+      updateObj.fg_gsheet_eod_synced_date = todayKey;
+    }
+    await chrome.storage.local.set(updateObj);
 
     return {
       success: true,
@@ -645,17 +627,23 @@ function startPolling() {
 
 // Service worker lifecycle & alarms
 chrome.runtime.onInstalled.addListener(() => {
-  chrome.alarms.create("fg_keepalive_alarm", { periodInMinutes: 0.5 });
+  chrome.alarms.create("fg_keepalive_alarm", { periodInMinutes: 1 });
+  chrome.alarms.create("fg_eod_alarm", { periodInMinutes: 1 });
   startPolling();
+  checkEndOfDayAutoSync();
 });
 
 chrome.runtime.onStartup.addListener(() => {
+  chrome.alarms.create("fg_keepalive_alarm", { periodInMinutes: 1 });
+  chrome.alarms.create("fg_eod_alarm", { periodInMinutes: 1 });
   startPolling();
+  checkEndOfDayAutoSync();
 });
 
 chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === "fg_keepalive_alarm") {
+  if (alarm.name === "fg_keepalive_alarm" || alarm.name === "fg_eod_alarm") {
     performMasterSync();
+    checkEndOfDayAutoSync();
   }
 });
 
@@ -749,6 +737,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     });
     return true;
   }
+
+  if (request.type === "CHECK_END_OF_DAY_SYNC") {
+    checkEndOfDayAutoSync(request.force === true).then(() => {
+      sendResponse({ success: true });
+    });
+    return true;
+  }
 });
 
 // When profile is changed anywhere in storage, immediately sync
@@ -765,3 +760,4 @@ chrome.storage.onChanged.addListener((changes, area) => {
 
 // Initial boot
 startPolling();
+checkEndOfDayAutoSync();

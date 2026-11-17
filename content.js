@@ -908,8 +908,39 @@
   let showAfterHours = false;
   let serverMarketOpen = null;
   let cachedDailyHistory = null;
+  const DUMMY_MOCK_PROFILES = [
+    "Options-Hedger-X",
+    "BankNifty-Delta-9",
+    "Trend-Follower-55",
+    "Alpha-Scalper-01",
+    "Nifty-Momentum-Pro"
+  ];
+
+  function purgeDummyFromHistory(history) {
+    if (!history || !history.byUser) return { byUser: {} };
+    const cleanByUser = {};
+    for (const [user, days] of Object.entries(history.byUser)) {
+      if (DUMMY_MOCK_PROFILES.includes(user)) continue;
+      const cleanDays = {};
+      for (const [dateKey, dayRec] of Object.entries(days || {})) {
+        if (!dayRec || dayRec.isReal === false) continue;
+        const trades = Number(dayRec.tradesCount) || 0;
+        const pnl = Number(dayRec.totalPnl) || 0;
+        const realized = Number(dayRec.realizedPnl) || 0;
+        if (trades > 0 || pnl !== 0 || realized !== 0) {
+          cleanDays[dateKey] = dayRec;
+        }
+      }
+      if (Object.keys(cleanDays).length > 0) {
+        cleanByUser[user] = cleanDays;
+      }
+    }
+    return { byUser: cleanByUser };
+  }
+
   let drawerActiveTab = "positions"; // "positions" or "daily"
-  let drawerDailyUser = "ALL";
+  let drawerDailyUser = "";
+  let hasTriggeredEodCheck = false;
 
   // Indian Market Hours (IST: Mon-Fri 9:00 AM - 3:30 PM)
   function isIndianMarketOpenNow() {
@@ -973,6 +1004,23 @@
         const isMin = localStorage.getItem("fg_is_minimized") === "true";
         restoreBtn.style.display = isMin ? "inline-flex" : "none";
       }
+    }
+
+    // After 3:30 PM IST on weekdays, trigger end-of-day Google Sheet sync check once per tab session
+    if (!localOpen) {
+      try {
+        const now = new Date();
+        const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+        const ist = new Date(utc + (3600000 * 5.5));
+        const day = ist.getDay();
+        const totalMins = ist.getHours() * 60 + ist.getMinutes();
+        if (day >= 1 && day <= 5 && totalMins >= 930 && !hasTriggeredEodCheck) {
+          hasTriggeredEodCheck = true;
+          chrome.runtime.sendMessage({ type: "CHECK_END_OF_DAY_SYNC" });
+        }
+      } catch (e) {}
+    } else {
+      hasTriggeredEodCheck = false;
     }
   }
 
@@ -1594,27 +1642,32 @@
       }
     }
 
-    // Populate Daily P&L user filter
+    // Populate Daily P&L user filter (Strictly Real Profiles Only)
     if (dailyUserSel) {
       const userSet = new Set();
-      Object.keys(cachedDailyHistory?.byUser || {}).forEach(u => userSet.add(u));
+      Object.keys(cachedDailyHistory?.byUser || {}).forEach(u => {
+        if (!DUMMY_MOCK_PROFILES.includes(u)) userSet.add(u);
+      });
       profilesList.forEach(p => {
         const u = typeof p === "string" ? p : p.user_name;
-        if (u) userSet.add(u);
+        if (u && !DUMMY_MOCK_PROFILES.includes(u)) userSet.add(u);
       });
       leaderboardData.forEach(p => {
         const u = p.user_name || p.name;
-        if (u) userSet.add(u);
+        if (u && !DUMMY_MOCK_PROFILES.includes(u)) userSet.add(u);
       });
 
       const userList = Array.from(userSet).sort();
-      const currentVal = drawerDailyUser || "ALL";
+      if (!drawerDailyUser || drawerDailyUser === "ALL" || !userSet.has(drawerDailyUser)) {
+        drawerDailyUser = currentProfile || userList[0] || "";
+      }
 
-      dailyUserSel.innerHTML = `
-        <option value="ALL" ${currentVal === "ALL" ? "selected" : ""}>👥 All Active Users (Combined)</option>
-        ${userList.map(u => `<option value="${u}" ${currentVal === u ? "selected" : ""}>👤 ${u}</option>`).join("")}
-      `;
-      dailyUserSel.value = currentVal;
+      if (userList.length > 0) {
+        dailyUserSel.innerHTML = userList.map(u => 
+          `<option value="${u}" ${drawerDailyUser === u ? "selected" : ""}>👤 ${u}</option>`
+        ).join("");
+        dailyUserSel.value = drawerDailyUser;
+      }
     }
   }
 
@@ -1900,52 +1953,26 @@
     });
   }
 
-  // Compute Day-to-Day P&L Summary & Records for selected user or ALL users
-  function computeDailyPnlSummary(historyByUser, targetUser = "ALL") {
-    let records = [];
+  // Compute Day-to-Day P&L Summary & Records for a specific trader profile (Profile-by-Profile only)
+  function computeDailyPnlSummary(historyByUser, targetUser) {
+    if (!targetUser || targetUser === "ALL") {
+      const availableUsers = Object.keys(historyByUser || {}).filter(u => !DUMMY_MOCK_PROFILES.includes(u));
+      targetUser = currentProfile || availableUsers[0] || "";
+    }
 
-    if (targetUser === "ALL") {
-      const dateMap = {};
-      for (const [user, userDays] of Object.entries(historyByUser || {})) {
-        for (const [dateKey, dayData] of Object.entries(userDays || {})) {
-          if (!dateMap[dateKey]) {
-            dateMap[dateKey] = {
-              date: dateKey,
-              displayDate: dayData.displayDate || dateKey,
-              dayName: dayData.dayName || "",
-              totalPnl: 0,
-              realizedPnl: 0,
-              unrealizedPnl: 0,
-              tradesCount: 0,
-              winningUsers: 0,
-              losingUsers: 0,
-              userBreakdown: []
-            };
-          }
-          const pnl = Number(dayData.totalPnl) || 0;
-          dateMap[dateKey].totalPnl += pnl;
-          dateMap[dateKey].realizedPnl += Number(dayData.realizedPnl) || 0;
-          dateMap[dateKey].unrealizedPnl += Number(dayData.unrealizedPnl) || 0;
-          dateMap[dateKey].tradesCount += Number(dayData.tradesCount) || 0;
-          if (pnl > 0) dateMap[dateKey].winningUsers++;
-          else if (pnl < 0) dateMap[dateKey].losingUsers++;
-
-          dateMap[dateKey].userBreakdown.push({
-            user: user,
-            pnl: pnl,
-            tradesCount: dayData.tradesCount || 0,
-            status: dayData.status || "RUNNING"
-          });
-        }
-      }
-      records = Object.values(dateMap);
-    } else {
-      const userDays = (historyByUser && historyByUser[targetUser]) || {};
-      records = Object.values(userDays).map(d => ({
+    const userDays = (historyByUser && historyByUser[targetUser]) || {};
+    const records = Object.values(userDays)
+      .filter(d => {
+        if (!d || d.isReal === false) return false;
+        const trades = Number(d.tradesCount) || 0;
+        const pnl = Number(d.totalPnl) || 0;
+        const realized = Number(d.realizedPnl) || 0;
+        return trades > 0 || pnl !== 0 || realized !== 0;
+      })
+      .map(d => ({
         ...d,
         user: targetUser
       }));
-    }
 
     records.sort((a, b) => b.date.localeCompare(a.date));
 
@@ -1986,12 +2013,20 @@
     };
   }
 
-  // Render Day-to-Day Profit & Loss Tab in the Drawer
+  // Render Day-to-Day Profit & Loss Tab in the Drawer (Strictly Profile-by-Profile)
   function renderDrawerDailyPnl() {
     const wrap = shadowRoot?.getElementById("fg-drawer-daily-wrap");
     if (!wrap) return;
 
-    const historyByUser = cachedDailyHistory?.byUser || {};
+    const cleanHistory = purgeDummyFromHistory(cachedDailyHistory);
+    cachedDailyHistory = cleanHistory;
+    const historyByUser = cleanHistory?.byUser || {};
+
+    if (!drawerDailyUser || drawerDailyUser === "ALL") {
+      const availableUsers = Object.keys(historyByUser).filter(u => !DUMMY_MOCK_PROFILES.includes(u));
+      drawerDailyUser = currentProfile || availableUsers[0] || "";
+    }
+
     const summary = computeDailyPnlSummary(historyByUser, drawerDailyUser);
 
     let todayKey = "";
@@ -2026,14 +2061,14 @@
           </div>
         </div>
         <div style="font-size:11px;color:#94a3b8;font-weight:600;">
-          Showing: <span style="color:#38bdf8;">${drawerDailyUser === "ALL" ? "All Active Users" : drawerDailyUser}</span> • ${summary.totalTradingDays} Days Logged
+          Showing: <span style="color:#38bdf8;">👤 ${drawerDailyUser}</span> • ${summary.totalTradingDays} Days Logged
         </div>
       </div>
       <div class="fg-drawer-daily-container">
         ${summary.records.length === 0 ? `
           <div style="padding:28px 20px;text-align:center;color:#8b949e;">
-            <div style="font-size:13px;font-weight:700;color:#c9d1d9;">No Day-to-Day Records Found</div>
-            <div style="font-size:11px;margin-top:4px;">No trading history logged yet for <strong>${drawerDailyUser}</strong>.</div>
+            <div style="font-size:13px;font-weight:700;color:#c9d1d9;">No Real Day-to-Day Records Found</div>
+            <div style="font-size:11px;margin-top:4px;">No trading activity logged yet for <strong>${drawerDailyUser}</strong>.</div>
           </div>
         ` : summary.records.map((r) => {
           const pnl = Number(r.totalPnl) || 0;
@@ -2060,32 +2095,12 @@
               </div>
               <div class="fg-daily-row-bottom">
                 <div>
-                  ${drawerDailyUser === "ALL" ? `
-                    <span>👥 Active Users: <strong style="color:#e2e8f0;">${r.userBreakdown?.length || 0}</strong> (<span style="color:#34d399;">${r.winningUsers || 0} Profit</span> / <span style="color:#f87171;">${r.losingUsers || 0} Loss</span>)</span>
-                  ` : `
-                    <span>👤 Trader: <strong style="color:#38bdf8;">${r.user}</strong> • Status: <strong style="color:#e2e8f0;">${r.status || "RUNNING"}</strong></span>
-                  `}
+                  <span>👤 Trader: <strong style="color:#38bdf8;">${r.user}</strong> • Status: <strong style="color:#e2e8f0;">${r.status || "RUNNING"}</strong></span>
                 </div>
                 <div>
                   <span>Trades Executed: <strong style="color:#e2e8f0;">${r.tradesCount || 0}</strong></span>
                 </div>
               </div>
-              ${drawerDailyUser === "ALL" && r.userBreakdown && r.userBreakdown.length > 0 ? `
-                <div class="fg-daily-user-breakdown">
-                  ${r.userBreakdown.map((u) => {
-                    const uPnl = Number(u.pnl) || 0;
-                    const uColor = uPnl > 0 ? "#34d399" : (uPnl < 0 ? "#f87171" : "#94a3b8");
-                    const uSign = uPnl > 0 ? "+" : "";
-                    return `
-                      <span class="fg-daily-user-pill">
-                        <span style="color:#94a3b8;">👤 ${u.user}:</span>
-                        <strong style="color:${uColor};">${uSign}${formatInr(uPnl)}</strong>
-                        <span style="opacity:0.6;font-size:9px;">(${u.tradesCount}T)</span>
-                      </span>
-                    `;
-                  }).join("")}
-                </div>
-              ` : ""}
             </div>
           `;
         }).join("")}
@@ -2097,7 +2112,7 @@
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === "local") {
       if (changes.fg_daily_pnl_history) {
-        cachedDailyHistory = changes.fg_daily_pnl_history.newValue;
+        cachedDailyHistory = purgeDummyFromHistory(changes.fg_daily_pnl_history.newValue);
         renderProfileSelectors();
         if (isDrawerOpen && drawerActiveTab === "daily") {
           renderDrawerDailyPnl();
@@ -2209,7 +2224,7 @@
     try {
       const stored = await chrome.storage.local.get(["fg_latest_data", "fg_selected_profile", "fg_is_minimized", "fg_pill_pos", "fg_show_after_hours", "fg_daily_pnl_history"]);
       if (stored.fg_daily_pnl_history) {
-        cachedDailyHistory = stored.fg_daily_pnl_history;
+        cachedDailyHistory = purgeDummyFromHistory(stored.fg_daily_pnl_history);
       }
       if (stored.fg_show_after_hours !== undefined) {
         showAfterHours = stored.fg_show_after_hours === true;

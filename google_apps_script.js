@@ -1,6 +1,6 @@
 /**
  * FinGroww Trading Extension - Google Sheets Webhook Script (Option A: Master Ledger)
- * 
+ *
  * INSTRUCTIONS TO DEPLOY:
  * 1. Open your Google Sheet.
  * 2. Click Extensions > Apps Script.
@@ -17,16 +17,18 @@
 function doPost(e) {
   try {
     if (!e || !e.postData || !e.postData.contents) {
-      return ContentService.createTextOutput(JSON.stringify({
-        status: "error",
-        message: "No post data received"
-      })).setMimeType(ContentService.MimeType.JSON);
+      return ContentService.createTextOutput(
+        JSON.stringify({
+          status: "error",
+          message: "No post data received",
+        }),
+      ).setMimeType(ContentService.MimeType.JSON);
     }
 
     const payload = JSON.parse(e.postData.contents);
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     let sheet = ss.getSheetByName("Daily PnL Ledger");
-    
+
     // Create sheet if it does not exist
     if (!sheet) {
       sheet = ss.insertSheet("Daily PnL Ledger");
@@ -46,17 +48,17 @@ function doPost(e) {
         "Trades Count",
         "Session Status",
         "Win Rate / Notes",
-        "Last Synced At"
+        "Last Synced At",
       ];
       sheet.appendRow(headers);
-      
+
       const headerRange = sheet.getRange("A1:L1");
       headerRange.setFontWeight("bold");
       headerRange.setBackground("#0f172a");
       headerRange.setFontColor("#38bdf8");
       headerRange.setHorizontalAlignment("center");
       sheet.setFrozenRows(1);
-      
+
       // Auto resize columns
       for (let i = 1; i <= 12; i++) {
         sheet.setColumnWidth(i, i === 4 ? 200 : 130);
@@ -64,12 +66,45 @@ function doPost(e) {
     }
 
     const rows = payload.rows || [];
+
+    // Purge any legacy dummy profiles or old mock rows from sheet
+    const dummyProfilesSet = {
+      "ALL USERS (Combined)": true,
+      "Options-Hedger-X": true,
+      "BankNifty-Delta-9": true,
+      "Trend-Follower-55": true,
+      "Alpha-Scalper-01": true,
+      "Nifty-Momentum-Pro": true
+    };
+    const mockDatesSet = {
+      "16 Nov 2026": true,
+      "14 Nov 2026": true,
+      "13 Nov 2026": true,
+      "12 Nov 2026": true,
+      "11 Nov 2026": true,
+      "10 Nov 2026": true
+    };
+
+    const initialLastRow = sheet.getLastRow();
+    if (initialLastRow > 1) {
+      const currentValues = sheet.getRange(2, 1, initialLastRow - 1, 4).getValues();
+      for (let r = currentValues.length - 1; r >= 0; r--) {
+        const rowDate = String(currentValues[r][0]).trim();
+        const rowTrader = String(currentValues[r][3]).trim();
+        if (dummyProfilesSet[rowTrader] || mockDatesSet[rowDate]) {
+          sheet.deleteRow(r + 2);
+        }
+      }
+    }
+
     if (rows.length === 0) {
-      return ContentService.createTextOutput(JSON.stringify({
-        status: "success",
-        message: "No rows to write",
-        count: 0
-      })).setMimeType(ContentService.MimeType.JSON);
+      return ContentService.createTextOutput(
+        JSON.stringify({
+          status: "success",
+          message: "No real profile rows to write",
+          count: 0,
+        }),
+      ).setMimeType(ContentService.MimeType.JSON);
     }
 
     // Read all existing data to prevent duplicate rows for the same Date + Trader
@@ -85,9 +120,11 @@ function doPost(e) {
 
     let updatedCount = 0;
     let insertedCount = 0;
-    const nowIst = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+    const nowIst = new Date().toLocaleString("en-IN", {
+      timeZone: "Asia/Kolkata",
+    });
 
-    rows.forEach(r => {
+    rows.forEach((r) => {
       const key = String(r.date).trim() + "_" + String(r.trader).trim();
       const isCombined = String(r.trader).includes("ALL USERS");
 
@@ -103,7 +140,7 @@ function doPost(e) {
         Number(r.tradesCount) || 0,
         r.status || "RUNNING",
         r.notes || "",
-        nowIst
+        nowIst,
       ];
 
       if (existingRowMap[key]) {
@@ -123,19 +160,22 @@ function doPost(e) {
       }
     });
 
-    return ContentService.createTextOutput(JSON.stringify({
-      status: "success",
-      updated: updatedCount,
-      inserted: insertedCount,
-      total: rows.length,
-      syncedAt: nowIst
-    })).setMimeType(ContentService.MimeType.JSON);
-
+    return ContentService.createTextOutput(
+      JSON.stringify({
+        status: "success",
+        updated: updatedCount,
+        inserted: insertedCount,
+        total: rows.length,
+        syncedAt: nowIst,
+      }),
+    ).setMimeType(ContentService.MimeType.JSON);
   } catch (err) {
-    return ContentService.createTextOutput(JSON.stringify({
-      status: "error",
-      message: err.toString()
-    })).setMimeType(ContentService.MimeType.JSON);
+    return ContentService.createTextOutput(
+      JSON.stringify({
+        status: "error",
+        message: err.toString(),
+      }),
+    ).setMimeType(ContentService.MimeType.JSON);
   }
 }
 
@@ -166,8 +206,11 @@ function formatRow(sheet, rowNum, isCombined, pnl) {
 }
 
 function doGet() {
-  return ContentService.createTextOutput(JSON.stringify({
-    status: "ok",
-    message: "FinGroww Google Sheets Webhook is active and waiting for POST data."
-  })).setMimeType(ContentService.MimeType.JSON);
+  return ContentService.createTextOutput(
+    JSON.stringify({
+      status: "ok",
+      message:
+        "FinGroww Google Sheets Webhook is active and waiting for POST data.",
+    }),
+  ).setMimeType(ContentService.MimeType.JSON);
 }

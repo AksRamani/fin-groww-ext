@@ -10,8 +10,38 @@ let cachedPositions = [];
 let cachedLeaderboard = [];
 let cachedProfiles = [];
 let cachedDailyHistory = null;
-let selectedDailyUser = "ALL";
+let selectedDailyUser = "";
 let activeTab = "positions";
+
+const DUMMY_MOCK_PROFILES = [
+  "Options-Hedger-X",
+  "BankNifty-Delta-9",
+  "Trend-Follower-55",
+  "Alpha-Scalper-01",
+  "Nifty-Momentum-Pro"
+];
+
+function purgeDummyFromHistory(history) {
+  if (!history || !history.byUser) return { byUser: {} };
+  const cleanByUser = {};
+  for (const [user, days] of Object.entries(history.byUser)) {
+    if (DUMMY_MOCK_PROFILES.includes(user)) continue;
+    const cleanDays = {};
+    for (const [dateKey, dayRec] of Object.entries(days || {})) {
+      if (!dayRec || dayRec.isReal === false) continue;
+      const trades = Number(dayRec.tradesCount) || 0;
+      const pnl = Number(dayRec.totalPnl) || 0;
+      const realized = Number(dayRec.realizedPnl) || 0;
+      if (trades > 0 || pnl !== 0 || realized !== 0) {
+        cleanDays[dateKey] = dayRec;
+      }
+    }
+    if (Object.keys(cleanDays).length > 0) {
+      cleanByUser[user] = cleanDays;
+    }
+  }
+  return { byUser: cleanByUser };
+}
 
 // Currency formatting
 function formatInr(val) {
@@ -267,52 +297,26 @@ function updateMarketStatusIndicator(isOpenFromServer) {
   }
 }
 
-// Compute Day-to-Day P&L Summary & Records for selected user or ALL users
-function computeDailyPnlSummary(historyByUser, targetUser = "ALL") {
-  let records = [];
+// Compute Day-to-Day P&L Summary & Records for a specific trader profile (Profile-by-Profile only)
+function computeDailyPnlSummary(historyByUser, targetUser) {
+  if (!targetUser || targetUser === "ALL") {
+    const availableUsers = Object.keys(historyByUser || {}).filter(u => !DUMMY_MOCK_PROFILES.includes(u));
+    targetUser = currentProfile || availableUsers[0] || "";
+  }
 
-  if (targetUser === "ALL") {
-    const dateMap = {};
-    for (const [user, userDays] of Object.entries(historyByUser || {})) {
-      for (const [dateKey, dayData] of Object.entries(userDays || {})) {
-        if (!dateMap[dateKey]) {
-          dateMap[dateKey] = {
-            date: dateKey,
-            displayDate: dayData.displayDate || dateKey,
-            dayName: dayData.dayName || "",
-            totalPnl: 0,
-            realizedPnl: 0,
-            unrealizedPnl: 0,
-            tradesCount: 0,
-            winningUsers: 0,
-            losingUsers: 0,
-            userBreakdown: []
-          };
-        }
-        const pnl = Number(dayData.totalPnl) || 0;
-        dateMap[dateKey].totalPnl += pnl;
-        dateMap[dateKey].realizedPnl += Number(dayData.realizedPnl) || 0;
-        dateMap[dateKey].unrealizedPnl += Number(dayData.unrealizedPnl) || 0;
-        dateMap[dateKey].tradesCount += Number(dayData.tradesCount) || 0;
-        if (pnl > 0) dateMap[dateKey].winningUsers++;
-        else if (pnl < 0) dateMap[dateKey].losingUsers++;
-
-        dateMap[dateKey].userBreakdown.push({
-          user: user,
-          pnl: pnl,
-          tradesCount: dayData.tradesCount || 0,
-          status: dayData.status || "RUNNING"
-        });
-      }
-    }
-    records = Object.values(dateMap);
-  } else {
-    const userDays = (historyByUser && historyByUser[targetUser]) || {};
-    records = Object.values(userDays).map(d => ({
+  const userDays = (historyByUser && historyByUser[targetUser]) || {};
+  const records = Object.values(userDays)
+    .filter(d => {
+      if (!d || d.isReal === false) return false;
+      const trades = Number(d.tradesCount) || 0;
+      const pnl = Number(d.totalPnl) || 0;
+      const realized = Number(d.realizedPnl) || 0;
+      return trades > 0 || pnl !== 0 || realized !== 0;
+    })
+    .map(d => ({
       ...d,
       user: targetUser
     }));
-  }
 
   // Sort descending by date (newest session first)
   records.sort((a, b) => b.date.localeCompare(a.date));
@@ -354,36 +358,42 @@ function computeDailyPnlSummary(historyByUser, targetUser = "ALL") {
   };
 }
 
-// Render Day-to-Day Profit & Loss View (User-Wise & All Active Users)
+// Render Day-to-Day Profit & Loss View (Strictly Profile-by-Profile)
 function renderDailyPnlView() {
-  const historyByUser = cachedDailyHistory?.byUser || {};
+  const cleanHistory = purgeDummyFromHistory(cachedDailyHistory);
+  cachedDailyHistory = cleanHistory;
+  const historyByUser = cleanHistory?.byUser || {};
 
-  // 1. Populate User Filter Dropdown
+  // 1. Populate User Filter Dropdown (Real Profiles Only)
   const selDailyUser = document.getElementById("selDailyUser");
   if (selDailyUser) {
-    // Gather unique users from history, profiles, and leaderboard
     const userSet = new Set();
-    Object.keys(historyByUser).forEach(u => userSet.add(u));
+    Object.keys(historyByUser).forEach(u => {
+      if (!DUMMY_MOCK_PROFILES.includes(u)) userSet.add(u);
+    });
     cachedProfiles.forEach(p => {
       const u = typeof p === "string" ? p : p.user_name;
-      if (u) userSet.add(u);
+      if (u && !DUMMY_MOCK_PROFILES.includes(u)) userSet.add(u);
     });
     cachedLeaderboard.forEach(p => {
       const u = p.user_name || p.name;
-      if (u) userSet.add(u);
+      if (u && !DUMMY_MOCK_PROFILES.includes(u)) userSet.add(u);
     });
 
     const userList = Array.from(userSet).sort();
-    const currentVal = selectedDailyUser || "ALL";
+    if (!selectedDailyUser || selectedDailyUser === "ALL" || !userSet.has(selectedDailyUser)) {
+      selectedDailyUser = currentProfile || userList[0] || "";
+    }
 
-    selDailyUser.innerHTML = `
-      <option value="ALL" ${currentVal === "ALL" ? "selected" : ""}>👥 All Active Users (Combined)</option>
-      ${userList.map(u => `<option value="${u}" ${currentVal === u ? "selected" : ""}>👤 ${u}</option>`).join("")}
-    `;
-    selDailyUser.value = currentVal;
+    if (userList.length > 0) {
+      selDailyUser.innerHTML = userList.map(u => 
+        `<option value="${u}" ${selectedDailyUser === u ? "selected" : ""}>👤 ${u}</option>`
+      ).join("");
+      selDailyUser.value = selectedDailyUser;
+    }
   }
 
-  // 2. Compute Summary Metrics
+  // 2. Compute Summary Metrics for the Selected Profile
   const summary = computeDailyPnlSummary(historyByUser, selectedDailyUser);
 
   const profitEl = document.getElementById("dailyTotalProfit");
@@ -423,7 +433,7 @@ function renderDailyPnlView() {
     listContainer.innerHTML = `
       <div class="empty-state">
         <div class="empty-icon">📅</div>
-        <div class="empty-text">No daily history recorded for <strong>${selectedDailyUser === "ALL" ? "active users" : selectedDailyUser}</strong></div>
+        <div class="empty-text">No real trading history logged yet for <strong>${selectedDailyUser || "this profile"}</strong></div>
       </div>
     `;
     return;
@@ -436,7 +446,7 @@ function renderDailyPnlView() {
     todayKey = new Date().toISOString().slice(0, 10);
   }
 
-  listContainer.innerHTML = summary.records.map((r, idx) => {
+  listContainer.innerHTML = summary.records.map((r) => {
     const pnl = Number(r.totalPnl) || 0;
     const isProfit = pnl > 0;
     const isLoss = pnl < 0;
@@ -445,31 +455,8 @@ function renderDailyPnlView() {
     const rowClass = isProfit ? "is-profit" : (isLoss ? "is-loss" : "is-breakeven");
     const pillClass = isProfit ? "pill-profit" : (isLoss ? "pill-loss" : "pill-neutral");
     const pnlSign = isProfit ? "+" : "";
-
-    const userLabel = selectedDailyUser === "ALL" 
-      ? `👥 ${r.userBreakdown?.length || 0} Traders (${r.winningUsers || 0}W / ${r.losingUsers || 0}L)`
-      : `👤 ${r.user || selectedDailyUser}`;
-
+    const userLabel = `👤 ${selectedDailyUser || r.user}`;
     const tradesLabel = `${r.tradesCount || 0} trade${r.tradesCount === 1 ? "" : "s"}`;
-
-    const breakdownHtml = (selectedDailyUser === "ALL" && r.userBreakdown && r.userBreakdown.length > 0)
-      ? `
-        <div class="daily-users-breakdown" id="breakdown-${idx}">
-          ${r.userBreakdown.map(ub => {
-            const uPnl = Number(ub.pnl) || 0;
-            const uSign = uPnl > 0 ? "+" : "";
-            const uColor = uPnl > 0 ? "val-green" : (uPnl < 0 ? "val-red" : "");
-            return `
-              <div class="daily-user-breakdown-row">
-                <span style="font-weight:600;color:#c9d1d9;">${ub.user}</span>
-                <span style="color:#8b949e;">${ub.tradesCount || 0} trades</span>
-                <span class="${uColor}" style="font-weight:700;font-family:var(--font-mono);">${uSign}${formatInr(uPnl)}</span>
-              </div>
-            `;
-          }).join("")}
-        </div>
-      `
-      : "";
 
     return `
       <div class="daily-pnl-item ${rowClass}">
@@ -488,20 +475,19 @@ function renderDailyPnlView() {
           <span class="daily-user-tag">${userLabel}</span>
           <span class="daily-trades-tag">📊 ${tradesLabel}</span>
         </div>
-
-        ${breakdownHtml}
       </div>
     `;
   }).join("");
 }
 
-// Generate & Download CSV of All Recorded Daily P&L (Option A: Master Ledger)
+// Generate & Download CSV of All Recorded Daily P&L (Strictly Profile-by-Profile, NO COMBINED ROWS)
 function exportDailyPnlToCsv() {
-  const historyByUser = cachedDailyHistory?.byUser || {};
+  const cleanHistory = purgeDummyFromHistory(cachedDailyHistory);
+  const historyByUser = cleanHistory?.byUser || {};
   const allDates = Array.from(new Set(Object.values(historyByUser).flatMap(u => Object.keys(u)))).sort((a, b) => b.localeCompare(a));
 
   if (allDates.length === 0) {
-    alert("No daily P&L records available to export.");
+    alert("No real daily P&L records available to export.");
     return;
   }
 
@@ -510,24 +496,11 @@ function exportDailyPnlToCsv() {
   ];
 
   for (const dKey of allDates) {
-    let combinedTotalPnl = 0;
-    let combinedRealizedPnl = 0;
-    let combinedUnrealizedPnl = 0;
-    let combinedEquity = 0;
-    let combinedTrades = 0;
-    let winningTraders = 0;
-    let losingTraders = 0;
-    let dDisplay = dKey;
-    let dDay = "";
-
-    const userRows = [];
-
     for (const [userName, userDays] of Object.entries(historyByUser)) {
-      const dayRecord = userDays[dKey];
-      if (!dayRecord) continue;
+      if (DUMMY_MOCK_PROFILES.includes(userName)) continue;
 
-      dDisplay = dayRecord.displayDate || dKey;
-      dDay = dayRecord.dayName || "";
+      const dayRecord = userDays[dKey];
+      if (!dayRecord || dayRecord.isReal === false) continue;
 
       const pnl = Number(dayRecord.totalPnl) || 0;
       const realized = Number(dayRecord.realizedPnl) || 0;
@@ -535,52 +508,28 @@ function exportDailyPnlToCsv() {
       const eq = Number(dayRecord.equity) || 100000;
       const trades = Number(dayRecord.tradesCount) || 0;
 
-      combinedTotalPnl += pnl;
-      combinedRealizedPnl += realized;
-      combinedUnrealizedPnl += unrealized;
-      combinedEquity += eq;
-      combinedTrades += trades;
-      if (pnl > 0) winningTraders++;
-      else if (pnl < 0) losingTraders++;
-
-      userRows.push([
-        `"${dDisplay}"`,
-        `"${dDay}"`,
-        `"15:30:00"`,
-        `"${userName}"`,
-        pnl.toFixed(2),
-        realized.toFixed(2),
-        unrealized.toFixed(2),
-        eq.toFixed(2),
-        trades,
-        `"${dayRecord.status || (pnl >= 0 ? "PROFIT" : "LOSS")}"`,
-        `"${trades} trades executed"`
-      ]);
+      // Only export profiles with actual trading activity
+      if (trades > 0 || pnl !== 0 || realized !== 0) {
+        csvRows.push([
+          `"${dayRecord.displayDate || dKey}"`,
+          `"${dayRecord.dayName || ""}"`,
+          `"15:30:00"`,
+          `"${userName}"`,
+          pnl.toFixed(2),
+          realized.toFixed(2),
+          unrealized.toFixed(2),
+          eq.toFixed(2),
+          trades,
+          `"${dayRecord.status || (pnl >= 0 ? "PROFIT" : "LOSS")}"`,
+          `"${trades} trades executed"`
+        ]);
+      }
     }
+  }
 
-    if (userRows.length > 0) {
-      const combinedWinRate = (winningTraders + losingTraders) > 0
-        ? ((winningTraders / (winningTraders + losingTraders)) * 100).toFixed(1) + "%"
-        : "N/A";
-
-      // Combined Row first
-      csvRows.push([
-        `"${dDisplay}"`,
-        `"${dDay}"`,
-        `"15:30:00"`,
-        `"ALL USERS (Combined)"`,
-        combinedTotalPnl.toFixed(2),
-        combinedRealizedPnl.toFixed(2),
-        combinedUnrealizedPnl.toFixed(2),
-        combinedEquity.toFixed(2),
-        combinedTrades,
-        `"${combinedTotalPnl > 0 ? "PROFIT" : (combinedTotalPnl < 0 ? "LOSS" : "BREAKEVEN")}"`,
-        `"Win Rate: ${combinedWinRate} (${winningTraders}W / ${losingTraders}L)"`
-      ]);
-
-      // User Rows
-      userRows.forEach(ur => csvRows.push(ur));
-    }
+  if (csvRows.length <= 1) {
+    alert("No active trading records found to export.");
+    return;
   }
 
   const csvContent = csvRows.map(e => e.join(",")).join("\n");
@@ -589,7 +538,7 @@ function exportDailyPnlToCsv() {
   const link = document.createElement("a");
   const todayIso = new Date().toISOString().slice(0, 10);
   link.setAttribute("href", url);
-  link.setAttribute("download", `FinGroww_Daily_PnL_Ledger_${todayIso}.csv`);
+  link.setAttribute("download", `FinGroww_Daily_PnL_Profiles_${todayIso}.csv`);
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
@@ -699,34 +648,23 @@ function setupGsheetSyncControls() {
     });
   }
 
-  // Direct sync function that runs right in popup (with automatic CORS/redirect fallback)
+  // Direct sync function that runs right in popup (Strictly Profile-by-Profile, ONLY Real Data)
   async function performDirectSync(webhookUrl) {
     if (webhookUrl.includes("docs.google.com/spreadsheets")) {
       throw new Error("Pasted Google Sheet link instead of Web App URL ending in /exec");
     }
 
-    const historyByUser = cachedDailyHistory?.byUser || {};
+    const cleanHistory = purgeDummyFromHistory(cachedDailyHistory);
+    const historyByUser = cleanHistory?.byUser || {};
     const allDates = Array.from(new Set(Object.values(historyByUser).flatMap(u => Object.keys(u)))).sort((a, b) => a.localeCompare(b));
 
     const rows = [];
     for (const dKey of allDates) {
-      let combinedTotalPnl = 0;
-      let combinedRealizedPnl = 0;
-      let combinedUnrealizedPnl = 0;
-      let combinedEquity = 0;
-      let combinedTrades = 0;
-      let winningTraders = 0;
-      let losingTraders = 0;
-      let dDisplay = dKey;
-      let dDay = "";
-
-      const userRows = [];
       for (const [userName, userDays] of Object.entries(historyByUser)) {
-        const dayRecord = userDays[dKey];
-        if (!dayRecord) continue;
+        if (DUMMY_MOCK_PROFILES.includes(userName)) continue;
 
-        dDisplay = dayRecord.displayDate || dKey;
-        dDay = dayRecord.dayName || "";
+        const dayRecord = userDays[dKey];
+        if (!dayRecord || dayRecord.isReal === false) continue;
 
         const pnl = Number(dayRecord.totalPnl) || 0;
         const realized = Number(dayRecord.realizedPnl) || 0;
@@ -734,53 +672,27 @@ function setupGsheetSyncControls() {
         const eq = Number(dayRecord.equity) || 100000;
         const trades = Number(dayRecord.tradesCount) || 0;
 
-        combinedTotalPnl += pnl;
-        combinedRealizedPnl += realized;
-        combinedUnrealizedPnl += unrealized;
-        combinedEquity += eq;
-        combinedTrades += trades;
-        if (pnl > 0) winningTraders++;
-        else if (pnl < 0) losingTraders++;
-
-        userRows.push({
-          date: dDisplay,
-          dayName: dDay,
-          time: "15:30:00",
-          trader: userName,
-          totalPnl: pnl,
-          realizedPnl: realized,
-          unrealizedPnl: unrealized,
-          equity: eq,
-          tradesCount: trades,
-          status: dayRecord.status || (pnl >= 0 ? "PROFIT" : "LOSS"),
-          notes: `${trades} trades executed`
-        });
-      }
-
-      if (userRows.length > 0) {
-        const combinedWinRate = (winningTraders + losingTraders) > 0
-          ? ((winningTraders / (winningTraders + losingTraders)) * 100).toFixed(1) + "%"
-          : "N/A";
-
-        rows.push({
-          date: dDisplay,
-          dayName: dDay,
-          time: "15:30:00",
-          trader: "ALL USERS (Combined)",
-          totalPnl: combinedTotalPnl,
-          realizedPnl: combinedRealizedPnl,
-          unrealizedPnl: combinedUnrealizedPnl,
-          equity: combinedEquity,
-          tradesCount: combinedTrades,
-          status: combinedTotalPnl > 0 ? "PROFIT" : (combinedTotalPnl < 0 ? "LOSS" : "BREAKEVEN"),
-          notes: `Win Rate: ${combinedWinRate} (${winningTraders}W / ${losingTraders}L) • ${userRows.length} Active Traders`
-        });
-        rows.push(...userRows);
+        // ONLY include profiles that made any trade or booked any profit/loss
+        if (trades > 0 || pnl !== 0 || realized !== 0) {
+          rows.push({
+            date: dayRecord.displayDate || dKey,
+            dayName: dayRecord.dayName || "",
+            time: "15:30:00",
+            trader: userName,
+            totalPnl: pnl,
+            realizedPnl: realized,
+            unrealizedPnl: unrealized,
+            equity: eq,
+            tradesCount: trades,
+            status: dayRecord.status || (pnl >= 0 ? "PROFIT" : "LOSS"),
+            notes: `${trades} trades executed`
+          });
+        }
       }
     }
 
     if (rows.length === 0) {
-      throw new Error("No daily P&L records found to sync");
+      throw new Error("No active profile records found to sync today");
     }
 
     const payload = JSON.stringify({
@@ -893,12 +805,13 @@ document.addEventListener("DOMContentLoaded", async () => {
       cachedProfiles = stored.fg_profiles_cache;
     }
     if (stored && stored.fg_daily_pnl_history) {
-      cachedDailyHistory = stored.fg_daily_pnl_history;
+      cachedDailyHistory = purgeDummyFromHistory(stored.fg_daily_pnl_history);
+      chrome.storage.local.set({ fg_daily_pnl_history: cachedDailyHistory });
     }
     if (stored && stored.fg_latest_data) {
       updatePopupUi(stored.fg_latest_data);
       if (stored.fg_latest_data.daily_pnl) {
-        cachedDailyHistory = stored.fg_latest_data.daily_pnl;
+        cachedDailyHistory = purgeDummyFromHistory(stored.fg_latest_data.daily_pnl);
       }
       if (typeof stored.fg_latest_data.is_market_open === "boolean") {
         updateMarketStatusIndicator(stored.fg_latest_data.is_market_open);
@@ -915,6 +828,9 @@ document.addEventListener("DOMContentLoaded", async () => {
       });
     }
   } catch (e) {}
+
+  // Trigger end-of-day auto sync check if after market close
+  chrome.runtime.sendMessage({ type: "CHECK_END_OF_DAY_SYNC" });
 
   updateMarketStatusIndicator();
   setInterval(updateMarketStatusIndicator, 1000);
@@ -974,13 +890,13 @@ document.addEventListener("DOMContentLoaded", async () => {
         currentProfile = changes.fg_selected_profile.newValue || currentProfile;
       }
       if (changes.fg_daily_pnl_history) {
-        cachedDailyHistory = changes.fg_daily_pnl_history.newValue;
+        cachedDailyHistory = purgeDummyFromHistory(changes.fg_daily_pnl_history.newValue);
         renderDailyPnlView();
       }
       if (changes.fg_latest_data) {
         updatePopupUi(changes.fg_latest_data.newValue);
         if (changes.fg_latest_data.newValue?.daily_pnl) {
-          cachedDailyHistory = changes.fg_latest_data.newValue.daily_pnl;
+          cachedDailyHistory = purgeDummyFromHistory(changes.fg_latest_data.newValue.daily_pnl);
           renderDailyPnlView();
         }
         if (typeof changes.fg_latest_data.newValue?.is_market_open === "boolean") {

@@ -51,11 +51,11 @@ A high-frequency Chrome extension (Manifest V3) that docks a professional tradin
   - Open the extension toolbar popup to view the live market status (`🟢 Open` / `🔴 Closed`).
   - Toggle **"Show Bar & Pill After Market Closes"** to keep the bar and pill visible after market hours for reviewing past trades and analytics.
 
-### 6. Day-to-Day Profit & Loss Storage & User-Wise Analytics
-- **Multi-Day P&L Persistence**: Persistently records daily profit and loss for every active trader profile in Chrome's local storage (`chrome.storage.local`).
-- **Aggregated & Individual Breakdown**:
-  - **`👥 All Active Users (Combined)`**: Computes platform-wide daily totals, win rates, and shows a detailed badge breakdown of each active trader's daily P&L.
-  - **`👤 Individual User Selection`**: Isolates any specific trader (`Aks-new-55k`, `Alpha-Scalper-01`, etc.) to review their personal trading days, trade counts, and results.
+### 6. Day-to-Day Profit & Loss Storage (Strictly Real Profile-by-Profile Data)
+- **100% Real Server Data Only**: Zero dummy, mock, or seeded past dates data. Only captures actual trading activity from live profiles that executed trades or booked profit/loss.
+- **Strictly Profile-by-Profile**:
+  - No combined totals or combined investment summaries.
+  - Review any specific trader profile (`14K Traders`, `Aks-new-55k`, `Akshay`, `Parth F&O`, etc.) individually to analyze their exact session P&L, trade counts, equity, and win rates.
 - **Summary KPI Cards**:
   - **Total Profit**: Sum of all winning day profits ($\sum_{pnl > 0} pnl$) with count of winning days.
   - **Total Loss**: Sum of all losing day losses ($\sum_{pnl < 0} |pnl|$) with count of losing days.
@@ -66,15 +66,16 @@ A high-frequency Chrome extension (Manifest V3) that docks a professional tradin
   - Available inside the in-page bottom status bar drawer under the **📅 Day-to-Day P&L** tab.
 
 ### 7. Google Sheets End-of-Day Auto-Sync & CSV Export (Option A: Master Ledger)
-- **Automatic Sync at Market Close (3:30 PM IST)**: The background worker detects the 3:30 PM IST market close transition and automatically compiles and posts the day's finalized ledger to your Google Sheet without manual action.
-- **Option A Master Ledger Structure**:
-  - Appends rows chronologically: Date, Day, Time, Trader / Profile, Total P&L (₹), Realized P&L, Unrealized P&L, Account Equity, Trades Count, Status, and Win Rate Notes.
-  - Generates an aggregated `ALL USERS (Combined)` summary row plus individual trader rows.
+- **Automatic Sync at Market Close (3:30 PM IST)**: At the end of the day after 3:30 PM IST, the extension gathers all profile data for profiles that made trades or booked profit/loss, and automatically syncs them to your connected Google Sheet.
+- **Profile-by-Profile Ledger Structure**:
+  - Appends rows chronologically: Date, Day, Time, Trader / Profile, Total P&L (₹), Realized P&L, Unrealized P&L, Account Equity, Trades Count, Session Status, and Trade Notes.
+  - No combined summary row; strictly individual real profile rows.
   - **Smart Upsert (Zero Duplicates)**: If synced more than once on the same day, the Google Apps Script updates existing rows in place rather than creating duplicate entries.
+  - **Auto-Purge of Dummy Rows**: Webhook automatically purges any previous mock rows (`Options-Hedger-X`, dummy dates) from the sheet.
 - **Popup Controls**:
   - **⚙️ Config Drawer**: Easily save your Google Apps Script Webhook URL and toggle auto-sync.
   - **📤 Sync to Sheet Now**: One-click manual sync for immediate export with live progress feedback and automatic CORS/redirect fallback.
-  - **📥 Export CSV**: One-click offline export downloading the complete multi-day ledger as a `.csv` file.
+  - **📥 Export CSV**: One-click offline export downloading the complete profile ledger as a `.csv` file.
 
 ### 8. Real-Time Synchronization & Stale-While-Revalidate Engine
 - **Fast 3-Second State Polling**: Fetches account metrics, active positions, profiles, and running leaderboards every 3 seconds.

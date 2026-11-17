@@ -42,8 +42,9 @@ This guide explains how to connect your **Google Sheet** to the FinGroww Trading
 
 ### How Data Appears in Your Sheet
 - **Every day at 3:30 PM IST (or when you click "Sync to Sheet Now")**:
-  - Automatically appends today's rows to the sheet named `Daily PnL Ledger`.
-  - Appends an aggregated summary row: `ALL USERS (Combined)`.
-  - Appends individual rows for every active trader (`Aks-new-55k`, `Alpha-Scalper-01`, etc.).
+  - Automatically appends today's real trading ledger to the sheet named `Daily PnL Ledger`.
+  - Strictly **Profile-by-Profile** (no aggregated combined row).
+  - Only records profiles that made trades or booked profit/loss today (100% real server data).
   - Color-codes positive P&L in green and losses in red.
   - **Zero Duplicates**: If synced more than once on the same date, it updates that day's existing rows instead of creating duplicates.
+  - Automatically purges any legacy mock/dummy rows when syncing.
