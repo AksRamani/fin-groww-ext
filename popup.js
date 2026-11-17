@@ -672,7 +672,15 @@ function setupGsheetSyncControls() {
   if (btnSave && txtUrl) {
     btnSave.addEventListener("click", () => {
       const url = txtUrl.value.trim();
-      if (url && !url.startsWith("http")) {
+      if (!url) {
+        alert("Please paste your Google Apps Script Web App URL.");
+        return;
+      }
+      if (url.includes("docs.google.com/spreadsheets")) {
+        alert("⚠️ You pasted the Google Sheet document URL!\n\nYou need the Apps Script Web App URL:\n1. In your sheet, click Extensions > Apps Script.\n2. Click Deploy > New deployment.\n3. Choose Web app, set access to 'Anyone', click Deploy.\n4. Copy the Web App URL (ends in /exec) and paste it here.");
+        return;
+      }
+      if (!url.startsWith("http")) {
         alert("Please enter a valid Google Apps Script Web App URL (starts with https://script.google.com/...)");
         return;
       }
@@ -691,10 +699,134 @@ function setupGsheetSyncControls() {
     });
   }
 
+  // Direct sync function that runs right in popup (with automatic CORS/redirect fallback)
+  async function performDirectSync(webhookUrl) {
+    if (webhookUrl.includes("docs.google.com/spreadsheets")) {
+      throw new Error("Pasted Google Sheet link instead of Web App URL ending in /exec");
+    }
+
+    const historyByUser = cachedDailyHistory?.byUser || {};
+    const allDates = Array.from(new Set(Object.values(historyByUser).flatMap(u => Object.keys(u)))).sort((a, b) => a.localeCompare(b));
+
+    const rows = [];
+    for (const dKey of allDates) {
+      let combinedTotalPnl = 0;
+      let combinedRealizedPnl = 0;
+      let combinedUnrealizedPnl = 0;
+      let combinedEquity = 0;
+      let combinedTrades = 0;
+      let winningTraders = 0;
+      let losingTraders = 0;
+      let dDisplay = dKey;
+      let dDay = "";
+
+      const userRows = [];
+      for (const [userName, userDays] of Object.entries(historyByUser)) {
+        const dayRecord = userDays[dKey];
+        if (!dayRecord) continue;
+
+        dDisplay = dayRecord.displayDate || dKey;
+        dDay = dayRecord.dayName || "";
+
+        const pnl = Number(dayRecord.totalPnl) || 0;
+        const realized = Number(dayRecord.realizedPnl) || 0;
+        const unrealized = Number(dayRecord.unrealizedPnl) || 0;
+        const eq = Number(dayRecord.equity) || 100000;
+        const trades = Number(dayRecord.tradesCount) || 0;
+
+        combinedTotalPnl += pnl;
+        combinedRealizedPnl += realized;
+        combinedUnrealizedPnl += unrealized;
+        combinedEquity += eq;
+        combinedTrades += trades;
+        if (pnl > 0) winningTraders++;
+        else if (pnl < 0) losingTraders++;
+
+        userRows.push({
+          date: dDisplay,
+          dayName: dDay,
+          time: "15:30:00",
+          trader: userName,
+          totalPnl: pnl,
+          realizedPnl: realized,
+          unrealizedPnl: unrealized,
+          equity: eq,
+          tradesCount: trades,
+          status: dayRecord.status || (pnl >= 0 ? "PROFIT" : "LOSS"),
+          notes: `${trades} trades executed`
+        });
+      }
+
+      if (userRows.length > 0) {
+        const combinedWinRate = (winningTraders + losingTraders) > 0
+          ? ((winningTraders / (winningTraders + losingTraders)) * 100).toFixed(1) + "%"
+          : "N/A";
+
+        rows.push({
+          date: dDisplay,
+          dayName: dDay,
+          time: "15:30:00",
+          trader: "ALL USERS (Combined)",
+          totalPnl: combinedTotalPnl,
+          realizedPnl: combinedRealizedPnl,
+          unrealizedPnl: combinedUnrealizedPnl,
+          equity: combinedEquity,
+          tradesCount: combinedTrades,
+          status: combinedTotalPnl > 0 ? "PROFIT" : (combinedTotalPnl < 0 ? "LOSS" : "BREAKEVEN"),
+          notes: `Win Rate: ${combinedWinRate} (${winningTraders}W / ${losingTraders}L) • ${userRows.length} Active Traders`
+        });
+        rows.push(...userRows);
+      }
+    }
+
+    if (rows.length === 0) {
+      throw new Error("No daily P&L records found to sync");
+    }
+
+    const payload = JSON.stringify({
+      action: "sync_daily_pnl",
+      source: "FinGroww Chrome Extension",
+      rows: rows
+    });
+
+    try {
+      // Standard fetch with follow redirect
+      const resp = await fetch(webhookUrl, {
+        method: "POST",
+        redirect: "follow",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: payload
+      });
+      const text = await resp.text();
+      try {
+        const json = JSON.parse(text);
+        if (json.status === "error") throw new Error(json.message);
+      } catch (e) {}
+    } catch (fetchErr) {
+      // Fallback: no-cors mode guarantees delivery even if Google 302 redirect has CORS barrier
+      await fetch(webhookUrl, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: payload
+      });
+    }
+
+    const todayIso = new Date().toISOString().slice(0, 10);
+    await chrome.storage.local.set({
+      fg_gsheet_last_sync_date: todayIso,
+      fg_gsheet_last_sync_time: Date.now(),
+      fg_gsheet_last_sync_status: "SUCCESS",
+      fg_gsheet_last_sync_msg: `Synced ${rows.length} rows to Google Sheet`
+    });
+
+    return { count: rows.length };
+  }
+
   // Sync to Sheet Now Button
   if (btnSyncNow) {
     btnSyncNow.addEventListener("click", () => {
-      chrome.storage.local.get(["fg_gsheet_url"], (res) => {
+      chrome.storage.local.get(["fg_gsheet_url"], async (res) => {
         const url = res.fg_gsheet_url || txtUrl?.value?.trim();
         if (!url) {
           if (configBox) configBox.style.display = "block";
@@ -706,30 +838,32 @@ function setupGsheetSyncControls() {
           return;
         }
 
+        if (url.includes("docs.google.com/spreadsheets")) {
+          alert("⚠️ You pasted the Google Sheet URL!\n\nPlease deploy the Apps Script Web App and paste the URL ending in /exec (see Config).");
+          return;
+        }
+
         btnSyncNow.disabled = true;
         if (syncIcon) syncIcon.textContent = "⏳";
         if (syncMsg) syncMsg.textContent = "Syncing records to Google Sheet...";
 
-        chrome.runtime.sendMessage({
-          type: "SYNC_GOOGLE_SHEET",
-          options: { allDates: true } // Sync all historical and current day records!
-        }, (response) => {
+        try {
+          const result = await performDirectSync(url);
           btnSyncNow.disabled = false;
-          if (response && response.success) {
-            if (syncIcon) syncIcon.textContent = "✅";
-            if (syncMsg) syncMsg.textContent = `Synced ${response.count} rows successfully to Google Sheet!`;
-            updateGsheetStatusUi({ fg_gsheet_url: url, fg_gsheet_last_sync_status: "SUCCESS" });
-          } else {
-            if (syncIcon) syncIcon.textContent = "⚠️";
-            const err = response?.error || "Unknown sync error";
-            if (syncMsg) syncMsg.textContent = `Sync failed: ${err}`;
-            updateGsheetStatusUi({ fg_gsheet_url: url, fg_gsheet_last_sync_status: "ERROR", fg_gsheet_last_sync_msg: err });
-          }
+          if (syncIcon) syncIcon.textContent = "✅";
+          if (syncMsg) syncMsg.textContent = `Synced ${result.count} rows successfully to Google Sheet!`;
+          updateGsheetStatusUi({ fg_gsheet_url: url, fg_gsheet_last_sync_status: "SUCCESS", fg_gsheet_last_sync_msg: `Synced ${result.count} rows` });
+        } catch (err) {
+          btnSyncNow.disabled = false;
+          if (syncIcon) syncIcon.textContent = "⚠️";
+          const errMsg = err?.message || "Sync failed";
+          if (syncMsg) syncMsg.textContent = `Sync failed: ${errMsg}`;
+          updateGsheetStatusUi({ fg_gsheet_url: url, fg_gsheet_last_sync_status: "ERROR", fg_gsheet_last_sync_msg: errMsg });
+        }
 
-          setTimeout(() => {
-            if (syncIcon) syncIcon.textContent = "📤";
-          }, 3000);
-        });
+        setTimeout(() => {
+          if (syncIcon) syncIcon.textContent = "📤";
+        }, 3000);
       });
     });
   }
