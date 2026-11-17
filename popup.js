@@ -318,6 +318,9 @@ function computeDailyPnlSummary(historyByUser, targetUser) {
   let winDaysCount = 0;
   let lossDaysCount = 0;
   let breakevenDaysCount = 0;
+  let totalTradesSum = 0;
+  let totalWinsSum = 0;
+  let totalLossesSum = 0;
 
   for (const r of records) {
     const pnl = Number(r.totalPnl) || 0;
@@ -331,10 +334,15 @@ function computeDailyPnlSummary(historyByUser, targetUser) {
     } else {
       breakevenDaysCount++;
     }
+    totalTradesSum += Number(r.tradesCount) || 0;
+    totalWinsSum += Number(r.winningTrades) || 0;
+    totalLossesSum += Number(r.losingTrades) || 0;
   }
 
   const totalTradingDays = records.length;
-  const winRate = totalTradingDays > 0 ? (winDaysCount / totalTradingDays) * 100 : 0;
+  const overallWinRate = (totalWinsSum + totalLossesSum) > 0
+    ? (totalWinsSum / (totalWinsSum + totalLossesSum)) * 100
+    : (totalTradingDays > 0 ? (winDaysCount / totalTradingDays) * 100 : 0);
 
   return {
     records,
@@ -345,7 +353,10 @@ function computeDailyPnlSummary(historyByUser, targetUser) {
     lossDaysCount,
     breakevenDaysCount,
     totalTradingDays,
-    winRate
+    totalTradesSum,
+    totalWinsSum,
+    totalLossesSum,
+    overallWinRate
   };
 }
 
@@ -410,7 +421,11 @@ function renderDailyPnlView() {
   }
 
   if (winRateEl) {
-    winRateEl.textContent = `Win Rate: ${summary.winRate.toFixed(1)}% (${summary.winDaysCount}W - ${summary.lossDaysCount}L)`;
+    if (summary.totalWinsSum > 0 || summary.totalLossesSum > 0) {
+      winRateEl.textContent = `Win Rate: ${summary.overallWinRate.toFixed(1)}% (${summary.totalWinsSum}W - ${summary.totalLossesSum}L)`;
+    } else {
+      winRateEl.textContent = `Win Rate: ${summary.overallWinRate.toFixed(1)}% (${summary.winDaysCount}W - ${summary.lossDaysCount}L Days)`;
+    }
   }
   if (countBadge) countBadge.textContent = `${summary.totalTradingDays} Days`;
   if (syncTimeEl) {
@@ -449,7 +464,21 @@ function renderDailyPnlView() {
     const pillClass = isProfit ? "pill-profit" : (isLoss ? "pill-loss" : "pill-neutral");
     const pnlSign = isProfit ? "+" : "";
     const userLabel = `👤 ${selectedDailyUser || r.user}`;
-    const tradesLabel = `${r.tradesCount || 0} trade${r.tradesCount === 1 ? "" : "s"}`;
+    
+    // Dynamic trade statistics breakdown
+    const trades = Number(r.tradesCount) || 0;
+    const wins = Number(r.winningTrades) || 0;
+    const losses = Number(r.losingTrades) || 0;
+    const openPos = Number(r.openPositionsCount) || 0;
+    const wr = Number(r.winRate) || ((wins + losses) > 0 ? (wins / (wins + losses)) * 100 : 0);
+
+    let tradesText = `${trades} trade${trades === 1 ? "" : "s"}`;
+    if (wins > 0 || losses > 0) {
+      tradesText = `${trades} trades (${wins}W / ${losses}L • ${wr.toFixed(1)}% WR)`;
+    }
+    if (openPos > 0) {
+      tradesText += ` • ${openPos} Open`;
+    }
 
     return `
       <div class="daily-pnl-item ${rowClass}">
@@ -466,7 +495,7 @@ function renderDailyPnlView() {
 
         <div class="daily-item-bottom">
           <span class="daily-user-tag">${userLabel}</span>
-          <span class="daily-trades-tag">📊 ${tradesLabel}</span>
+          <span class="daily-trades-tag" title="${wins} Wins, ${losses} Losses, ${openPos} Open Positions">📊 ${tradesText}</span>
         </div>
       </div>
     `;
@@ -498,6 +527,15 @@ function exportDailyPnlToCsv() {
       const unrealized = Number(dayRecord.unrealizedPnl) || 0;
       const eq = Number(dayRecord.equity) || 100000;
       const trades = Number(dayRecord.tradesCount) || 0;
+      const wins = Number(dayRecord.winningTrades) || 0;
+      const losses = Number(dayRecord.losingTrades) || 0;
+      const wr = Number(dayRecord.winRate) || ((wins + losses) > 0 ? (wins / (wins + losses)) * 100 : 0);
+      const openPos = Number(dayRecord.openPositionsCount) || 0;
+
+      let notes = `${trades} trades executed`;
+      if (wins > 0 || losses > 0) {
+        notes = `${trades} trades (${wins}W / ${losses}L - ${wr.toFixed(1)}% WR)${openPos > 0 ? ` • ${openPos} Open` : ""}`;
+      }
 
       // Only export profiles with actual trading activity
       if (trades > 0 || pnl !== 0 || realized !== 0) {
@@ -512,7 +550,7 @@ function exportDailyPnlToCsv() {
           eq.toFixed(2),
           trades,
           `"${dayRecord.status || (pnl >= 0 ? "PROFIT" : "LOSS")}"`,
-          `"${trades} trades executed"`
+          `"${notes}"`
         ]);
       }
     }
@@ -660,6 +698,15 @@ function setupGsheetSyncControls() {
         const unrealized = Number(dayRecord.unrealizedPnl) || 0;
         const eq = Number(dayRecord.equity) || 100000;
         const trades = Number(dayRecord.tradesCount) || 0;
+        const wins = Number(dayRecord.winningTrades) || 0;
+        const losses = Number(dayRecord.losingTrades) || 0;
+        const wr = Number(dayRecord.winRate) || ((wins + losses) > 0 ? (wins / (wins + losses)) * 100 : 0);
+        const openPos = Number(dayRecord.openPositionsCount) || 0;
+
+        let notesText = `${trades} trades executed`;
+        if (wins > 0 || losses > 0) {
+          notesText = `${trades} trades (${wins}W / ${losses}L - ${wr.toFixed(1)}% WR)${openPos > 0 ? ` • ${openPos} Open` : ""}`;
+        }
 
         // ONLY include profiles that made any trade or booked any profit/loss
         if (trades > 0 || pnl !== 0 || realized !== 0) {
@@ -674,7 +721,7 @@ function setupGsheetSyncControls() {
             equity: eq,
             tradesCount: trades,
             status: dayRecord.status || (pnl >= 0 ? "PROFIT" : "LOSS"),
-            notes: `${trades} trades executed`
+            notes: notesText
           });
         }
       }

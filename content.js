@@ -1973,6 +1973,9 @@
     let winDaysCount = 0;
     let lossDaysCount = 0;
     let breakevenDaysCount = 0;
+    let totalTradesSum = 0;
+    let totalWinsSum = 0;
+    let totalLossesSum = 0;
 
     for (const r of records) {
       const pnl = Number(r.totalPnl) || 0;
@@ -1986,10 +1989,15 @@
       } else {
         breakevenDaysCount++;
       }
+      totalTradesSum += Number(r.tradesCount) || 0;
+      totalWinsSum += Number(r.winningTrades) || 0;
+      totalLossesSum += Number(r.losingTrades) || 0;
     }
 
     const totalTradingDays = records.length;
-    const winRate = totalTradingDays > 0 ? (winDaysCount / totalTradingDays) * 100 : 0;
+    const overallWinRate = (totalWinsSum + totalLossesSum) > 0
+      ? (totalWinsSum / (totalWinsSum + totalLossesSum)) * 100
+      : (totalTradingDays > 0 ? (winDaysCount / totalTradingDays) * 100 : 0);
 
     return {
       records,
@@ -2000,7 +2008,10 @@
       lossDaysCount,
       breakevenDaysCount,
       totalTradingDays,
-      winRate
+      totalTradesSum,
+      totalWinsSum,
+      totalLossesSum,
+      overallWinRate
     };
   }
 
@@ -2029,6 +2040,9 @@
 
     const netSign = summary.netPnl > 0 ? "+" : "";
     const netClass = summary.netPnl > 0 ? "fg-drawer-kpi-profit" : (summary.netPnl < 0 ? "fg-drawer-kpi-loss" : "fg-drawer-kpi-net");
+    const winRateStr = (summary.totalWinsSum > 0 || summary.totalLossesSum > 0)
+      ? `${summary.overallWinRate.toFixed(1)}% (${summary.totalWinsSum}W - ${summary.totalLossesSum}L)`
+      : `${summary.overallWinRate.toFixed(1)}%`;
 
     wrap.innerHTML = `
       <div class="fg-drawer-daily-bar">
@@ -2048,7 +2062,7 @@
             <span>${netSign}${formatInr(summary.netPnl)}</span>
           </div>
           <div class="fg-drawer-meta-pill" title="Win Rate percentage across trading days">
-            🎯 Win Rate: <strong>${summary.winRate.toFixed(1)}%</strong>
+            🎯 Win Rate: <strong>${winRateStr}</strong>
           </div>
         </div>
         <div style="font-size:11px;color:#94a3b8;font-weight:600;">
@@ -2070,6 +2084,12 @@
           const pillClass = isProfit ? "fg-tbl-profit" : (isLoss ? "fg-tbl-loss" : "");
           const pnlSign = isProfit ? "+" : "";
 
+          const trades = Number(r.tradesCount) || 0;
+          const wins = Number(r.winningTrades) || 0;
+          const losses = Number(r.losingTrades) || 0;
+          const openPos = Number(r.openPositionsCount) || 0;
+          const wr = Number(r.winRate) || ((wins + losses) > 0 ? (wins / (wins + losses)) * 100 : 0);
+
           return `
             <div class="fg-daily-card ${cardClass}">
               <div class="fg-daily-row-top">
@@ -2089,7 +2109,7 @@
                   <span>👤 Trader: <strong style="color:#38bdf8;">${r.user}</strong> • Status: <strong style="color:#e2e8f0;">${r.status || "RUNNING"}</strong></span>
                 </div>
                 <div>
-                  <span>Trades Executed: <strong style="color:#e2e8f0;">${r.tradesCount || 0}</strong></span>
+                  <span>Trades Executed: <strong style="color:#e2e8f0;">${trades}</strong>${(wins > 0 || losses > 0) ? ` (${wins}W / ${losses}L • ${wr.toFixed(1)}% WR)` : ""}${openPos > 0 ? ` • <strong style="color:#38bdf8;">${openPos} Open</strong>` : ""}</span>
                 </div>
               </div>
             </div>

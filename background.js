@@ -83,24 +83,67 @@ function cleanDailyPnlHistory(validProfiles = []) {
   chrome.storage.local.set({ fg_daily_pnl_history: dailyPnlHistory });
 }
 
-// Record/update day-to-day P&L for a specific user (100% REAL server data only)
-function updateDailyPnlRecord(profileName, accountObj, statusVal, activePositionsCount = 0) {
+// Record/update day-to-day P&L for a specific user (100% REAL dynamic server metrics only)
+function updateDailyPnlRecord(profileName, accountObj, statusVal, activePositionsCount = 0, stats = {}) {
   if (!profileName) return;
 
+  const { dateKey, displayDate, dayName } = getIstDateInfo();
+  const existingRecord = dailyPnlHistory.byUser?.[profileName]?.[dateKey] || {};
+
   const acc = accountObj || {};
-  const totalPnl = Number(acc.total_pnl !== undefined ? acc.total_pnl : acc.net_pnl) || 0;
-  const realizedPnl = Number(acc.realized_pnl) || 0;
-  const unrealizedPnl = Number(acc.unrealized_pnl) || 0;
-  const equity = Number(acc.account_equity || acc.equity) || 100000;
-  const closedTrades = Number(acc.closed_trades_count || acc.total_trades) || 0;
-  const trades = (activePositionsCount || 0) + closedTrades;
+  const totalPnl = Number(acc.total_pnl !== undefined ? acc.total_pnl : (acc.net_pnl !== undefined ? acc.net_pnl : existingRecord.totalPnl)) || 0;
+  const realizedPnl = Number(acc.realized_pnl !== undefined ? acc.realized_pnl : existingRecord.realizedPnl) || 0;
+  const unrealizedPnl = Number(acc.unrealized_pnl !== undefined ? acc.unrealized_pnl : existingRecord.unrealizedPnl) || 0;
+  const equity = Number(acc.account_equity || acc.equity || existingRecord.equity) || 100000;
+
+  // Real trades count resolution from server API:
+  let serverTotalTrades = 0;
+  if (stats.total_trades !== undefined && stats.total_trades !== null) {
+    serverTotalTrades = Number(stats.total_trades);
+  } else if (stats.total_closed_trades_count !== undefined && stats.total_closed_trades_count !== null) {
+    serverTotalTrades = Number(stats.total_closed_trades_count);
+  } else if (acc.total_trades !== undefined && acc.total_trades !== null) {
+    serverTotalTrades = Number(acc.total_trades);
+  } else if (acc.closed_trades_count !== undefined && acc.closed_trades_count !== null) {
+    serverTotalTrades = Number(acc.closed_trades_count);
+  } else if (existingRecord.tradesCount !== undefined && existingRecord.tradesCount > activePositionsCount) {
+    serverTotalTrades = Number(existingRecord.tradesCount);
+  }
+
+  const winningTrades = Number(
+    stats.winning_trades !== undefined && stats.winning_trades !== null
+      ? stats.winning_trades
+      : (acc.winning_trades !== undefined ? acc.winning_trades : (existingRecord.winningTrades || 0))
+  ) || 0;
+
+  const losingTrades = Number(
+    stats.losing_trades !== undefined && stats.losing_trades !== null
+      ? stats.losing_trades
+      : (acc.losing_trades !== undefined ? acc.losing_trades : (existingRecord.losingTrades || 0))
+  ) || 0;
+
+  const openPositions = Number(
+    activePositionsCount !== undefined
+      ? activePositionsCount
+      : (stats.open_positions_count !== undefined ? stats.open_positions_count : (existingRecord.openPositionsCount || 0))
+  ) || 0;
+
+  // When total trades are reported by server (e.g. 196), use it; otherwise sum closed trades + active positions
+  const trades = serverTotalTrades > 0 ? serverTotalTrades : (openPositions + (winningTrades + losingTrades));
+
+  let winRate = 0;
+  if (stats.win_rate !== undefined && stats.win_rate !== null) {
+    winRate = Number(stats.win_rate) || 0;
+  } else if (existingRecord.winRate !== undefined) {
+    winRate = Number(existingRecord.winRate) || 0;
+  } else if ((winningTrades + losingTrades) > 0) {
+    winRate = (winningTrades / (winningTrades + losingTrades)) * 100;
+  }
 
   // Only store if this profile has made any trade or booked any profit/loss
   if (trades === 0 && totalPnl === 0 && realizedPnl === 0 && unrealizedPnl === 0) {
     return;
   }
-
-  const { dateKey, displayDate, dayName } = getIstDateInfo();
 
   if (!dailyPnlHistory.byUser) dailyPnlHistory.byUser = {};
   if (!dailyPnlHistory.byUser[profileName]) dailyPnlHistory.byUser[profileName] = {};
@@ -113,8 +156,12 @@ function updateDailyPnlRecord(profileName, accountObj, statusVal, activePosition
     realizedPnl: realizedPnl,
     unrealizedPnl: unrealizedPnl,
     equity: equity,
-    status: statusVal || "RUNNING",
+    status: statusVal || existingRecord.status || "RUNNING",
     tradesCount: trades,
+    winningTrades: winningTrades,
+    losingTrades: losingTrades,
+    winRate: winRate,
+    openPositionsCount: openPositions,
     isReal: true,
     timestamp: Date.now()
   };
@@ -298,21 +345,48 @@ async function performMasterSync() {
 
     const totalPnl = Number(account.total_pnl) || 0;
 
-    // Update daily P&L for current user
-    updateDailyPnlRecord(currentProfile, account, engineStatus, activePositions ? activePositions.length : 0);
+    // Find current profile in leaderboard for complete win/loss trade analytics
+    const currentLb = (leaderboard || []).find(p => (p.user_name || p.name) === currentProfile);
+
+    // Update daily P&L for current user with full dynamic stats
+    updateDailyPnlRecord(
+      currentProfile,
+      account,
+      engineStatus,
+      activePositions ? activePositions.length : 0,
+      {
+        total_trades: currentLb?.total_trades !== undefined ? currentLb.total_trades : sessionData?.total_closed_trades_count,
+        total_closed_trades_count: sessionData?.total_closed_trades_count,
+        winning_trades: currentLb?.winning_trades,
+        losing_trades: currentLb?.losing_trades,
+        win_rate: currentLb?.win_rate,
+        open_positions_count: activePositions ? activePositions.length : currentLb?.open_positions_count
+      }
+    );
 
     // Update daily P&L for all active users from leaderboard
     if (Array.isArray(leaderboard) && leaderboard.length > 0) {
       leaderboard.forEach(entry => {
         const u = entry.user_name || entry.name;
-        if (u && u !== currentProfile) {
-          updateDailyPnlRecord(u, {
-            total_pnl: entry.net_pnl !== undefined ? entry.net_pnl : entry.total_pnl,
-            realized_pnl: entry.realized_pnl,
-            unrealized_pnl: entry.unrealized_pnl,
-            account_equity: entry.account_equity || entry.equity,
-            total_trades: entry.total_trades
-          }, entry.status || "RUNNING", 0);
+        if (u) {
+          updateDailyPnlRecord(
+            u,
+            {
+              total_pnl: entry.net_pnl !== undefined ? entry.net_pnl : entry.total_pnl,
+              realized_pnl: entry.realized_pnl,
+              unrealized_pnl: entry.unrealized_pnl,
+              account_equity: entry.account_equity || entry.equity
+            },
+            entry.status || "RUNNING",
+            entry.open_positions_count || 0,
+            {
+              total_trades: entry.total_trades,
+              winning_trades: entry.winning_trades,
+              losing_trades: entry.losing_trades,
+              win_rate: entry.win_rate,
+              open_positions_count: entry.open_positions_count
+            }
+          );
         }
       });
     }
@@ -431,6 +505,15 @@ async function syncDailyPnlToGoogleSheet(options = {}) {
         const unrealized = Number(dayRecord.unrealizedPnl) || 0;
         const eq = Number(dayRecord.equity) || 100000;
         const trades = Number(dayRecord.tradesCount) || 0;
+        const wins = Number(dayRecord.winningTrades) || 0;
+        const losses = Number(dayRecord.losingTrades) || 0;
+        const winRateVal = Number(dayRecord.winRate) || 0;
+        const openPos = Number(dayRecord.openPositionsCount) || 0;
+
+        let notesText = `${trades} trades executed`;
+        if (wins > 0 || losses > 0) {
+          notesText = `${trades} trades (${wins}W / ${losses}L - ${winRateVal.toFixed(1)}% WR)${openPos > 0 ? ` • ${openPos} Open` : ""}`;
+        }
 
         // ONLY include profiles that made any trade or booked any profit/loss
         if (trades > 0 || pnl !== 0 || realized !== 0) {
@@ -445,7 +528,7 @@ async function syncDailyPnlToGoogleSheet(options = {}) {
             equity: eq,
             tradesCount: trades,
             status: dayRecord.status || (pnl >= 0 ? "PROFIT" : "LOSS"),
-            notes: `${trades} trades executed`
+            notes: notesText
           });
         }
       }
