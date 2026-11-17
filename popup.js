@@ -495,6 +495,251 @@ function renderDailyPnlView() {
   }).join("");
 }
 
+// Generate & Download CSV of All Recorded Daily P&L (Option A: Master Ledger)
+function exportDailyPnlToCsv() {
+  const historyByUser = cachedDailyHistory?.byUser || {};
+  const allDates = Array.from(new Set(Object.values(historyByUser).flatMap(u => Object.keys(u)))).sort((a, b) => b.localeCompare(a));
+
+  if (allDates.length === 0) {
+    alert("No daily P&L records available to export.");
+    return;
+  }
+
+  const csvRows = [
+    ["Date", "Day", "Time (IST)", "Trader / Profile", "Total P&L (INR)", "Realized P&L (INR)", "Unrealized P&L (INR)", "Account Equity (INR)", "Trades Count", "Session Status", "Win Rate / Notes"]
+  ];
+
+  for (const dKey of allDates) {
+    let combinedTotalPnl = 0;
+    let combinedRealizedPnl = 0;
+    let combinedUnrealizedPnl = 0;
+    let combinedEquity = 0;
+    let combinedTrades = 0;
+    let winningTraders = 0;
+    let losingTraders = 0;
+    let dDisplay = dKey;
+    let dDay = "";
+
+    const userRows = [];
+
+    for (const [userName, userDays] of Object.entries(historyByUser)) {
+      const dayRecord = userDays[dKey];
+      if (!dayRecord) continue;
+
+      dDisplay = dayRecord.displayDate || dKey;
+      dDay = dayRecord.dayName || "";
+
+      const pnl = Number(dayRecord.totalPnl) || 0;
+      const realized = Number(dayRecord.realizedPnl) || 0;
+      const unrealized = Number(dayRecord.unrealizedPnl) || 0;
+      const eq = Number(dayRecord.equity) || 100000;
+      const trades = Number(dayRecord.tradesCount) || 0;
+
+      combinedTotalPnl += pnl;
+      combinedRealizedPnl += realized;
+      combinedUnrealizedPnl += unrealized;
+      combinedEquity += eq;
+      combinedTrades += trades;
+      if (pnl > 0) winningTraders++;
+      else if (pnl < 0) losingTraders++;
+
+      userRows.push([
+        `"${dDisplay}"`,
+        `"${dDay}"`,
+        `"15:30:00"`,
+        `"${userName}"`,
+        pnl.toFixed(2),
+        realized.toFixed(2),
+        unrealized.toFixed(2),
+        eq.toFixed(2),
+        trades,
+        `"${dayRecord.status || (pnl >= 0 ? "PROFIT" : "LOSS")}"`,
+        `"${trades} trades executed"`
+      ]);
+    }
+
+    if (userRows.length > 0) {
+      const combinedWinRate = (winningTraders + losingTraders) > 0
+        ? ((winningTraders / (winningTraders + losingTraders)) * 100).toFixed(1) + "%"
+        : "N/A";
+
+      // Combined Row first
+      csvRows.push([
+        `"${dDisplay}"`,
+        `"${dDay}"`,
+        `"15:30:00"`,
+        `"ALL USERS (Combined)"`,
+        combinedTotalPnl.toFixed(2),
+        combinedRealizedPnl.toFixed(2),
+        combinedUnrealizedPnl.toFixed(2),
+        combinedEquity.toFixed(2),
+        combinedTrades,
+        `"${combinedTotalPnl > 0 ? "PROFIT" : (combinedTotalPnl < 0 ? "LOSS" : "BREAKEVEN")}"`,
+        `"Win Rate: ${combinedWinRate} (${winningTraders}W / ${losingTraders}L)"`
+      ]);
+
+      // User Rows
+      userRows.forEach(ur => csvRows.push(ur));
+    }
+  }
+
+  const csvContent = csvRows.map(e => e.join(",")).join("\n");
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  const todayIso = new Date().toISOString().slice(0, 10);
+  link.setAttribute("href", url);
+  link.setAttribute("download", `FinGroww_Daily_PnL_Ledger_${todayIso}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+// Google Sheet Sync & Webhook UI Controllers
+function setupGsheetSyncControls() {
+  const gsheetBadge = document.getElementById("gsheetStatusBadge");
+  const gsheetDesc = document.getElementById("gsheetStatusDesc");
+  const btnToggleConfig = document.getElementById("btnToggleGsheetConfig");
+  const configBox = document.getElementById("gsheetConfigBox");
+  const txtUrl = document.getElementById("txtGsheetUrl");
+  const btnSave = document.getElementById("btnSaveGsheetUrl");
+  const chkAutoSync = document.getElementById("chkGsheetAutoSync");
+  const btnSyncNow = document.getElementById("btnSyncGsheetNow");
+  const btnExportCsv = document.getElementById("btnExportCsv");
+  const syncIcon = document.getElementById("gsheetSyncIcon");
+  const syncMsg = document.getElementById("gsheetLastSyncMsg");
+
+  // Read stored Google Sheet config
+  chrome.storage.local.get([
+    "fg_gsheet_url",
+    "fg_gsheet_autosync",
+    "fg_gsheet_last_sync_date",
+    "fg_gsheet_last_sync_time",
+    "fg_gsheet_last_sync_status",
+    "fg_gsheet_last_sync_msg"
+  ], (res) => {
+    if (txtUrl && res.fg_gsheet_url) {
+      txtUrl.value = res.fg_gsheet_url;
+    }
+    if (chkAutoSync && res.fg_gsheet_autosync !== undefined) {
+      chkAutoSync.checked = res.fg_gsheet_autosync === true;
+    }
+
+    updateGsheetStatusUi(res);
+  });
+
+  function updateGsheetStatusUi(state) {
+    if (!gsheetBadge) return;
+    const url = state?.fg_gsheet_url || txtUrl?.value?.trim();
+    const status = state?.fg_gsheet_last_sync_status;
+    const lastDate = state?.fg_gsheet_last_sync_date;
+
+    if (!url) {
+      gsheetBadge.className = "gsheet-badge gsheet-badge-idle";
+      gsheetBadge.textContent = "Not Configured";
+      if (gsheetDesc) gsheetDesc.textContent = "Click Config to connect Google Sheet";
+    } else if (status === "SUCCESS") {
+      gsheetBadge.className = "gsheet-badge gsheet-badge-ok";
+      gsheetBadge.textContent = lastDate ? `Synced (${lastDate})` : "Connected";
+      if (gsheetDesc) gsheetDesc.textContent = "Connected • Auto-syncs at 3:30 PM IST";
+    } else if (status === "ERROR") {
+      gsheetBadge.className = "gsheet-badge gsheet-badge-err";
+      gsheetBadge.textContent = "Sync Error";
+      if (gsheetDesc) gsheetDesc.textContent = "Error during last sync • Check Config";
+    } else {
+      gsheetBadge.className = "gsheet-badge gsheet-badge-ok";
+      gsheetBadge.textContent = "Connected";
+      if (gsheetDesc) gsheetDesc.textContent = "Connected • Auto-syncs at 3:30 PM IST";
+    }
+
+    if (syncMsg && state?.fg_gsheet_last_sync_msg) {
+      syncMsg.textContent = state.fg_gsheet_last_sync_msg;
+    }
+  }
+
+  // Toggle Config Drawer
+  if (btnToggleConfig && configBox) {
+    btnToggleConfig.addEventListener("click", () => {
+      const isHidden = configBox.style.display === "none";
+      configBox.style.display = isHidden ? "block" : "none";
+      btnToggleConfig.textContent = isHidden ? "✕ Close" : "⚙️ Config";
+      if (isHidden && txtUrl) txtUrl.focus();
+    });
+  }
+
+  // Save Webhook URL
+  if (btnSave && txtUrl) {
+    btnSave.addEventListener("click", () => {
+      const url = txtUrl.value.trim();
+      if (url && !url.startsWith("http")) {
+        alert("Please enter a valid Google Apps Script Web App URL (starts with https://script.google.com/...)");
+        return;
+      }
+      chrome.storage.local.set({ fg_gsheet_url: url }, () => {
+        btnSave.textContent = "Saved ✓";
+        setTimeout(() => { btnSave.textContent = "Save"; }, 1500);
+        updateGsheetStatusUi({ fg_gsheet_url: url });
+      });
+    });
+  }
+
+  // Auto-sync Checkbox
+  if (chkAutoSync) {
+    chkAutoSync.addEventListener("change", (e) => {
+      chrome.storage.local.set({ fg_gsheet_autosync: e.target.checked });
+    });
+  }
+
+  // Sync to Sheet Now Button
+  if (btnSyncNow) {
+    btnSyncNow.addEventListener("click", () => {
+      chrome.storage.local.get(["fg_gsheet_url"], (res) => {
+        const url = res.fg_gsheet_url || txtUrl?.value?.trim();
+        if (!url) {
+          if (configBox) configBox.style.display = "block";
+          if (btnToggleConfig) btnToggleConfig.textContent = "✕ Close";
+          if (txtUrl) {
+            txtUrl.focus();
+            alert("Please paste your Google Apps Script Webhook URL and click Save first.");
+          }
+          return;
+        }
+
+        btnSyncNow.disabled = true;
+        if (syncIcon) syncIcon.textContent = "⏳";
+        if (syncMsg) syncMsg.textContent = "Syncing records to Google Sheet...";
+
+        chrome.runtime.sendMessage({
+          type: "SYNC_GOOGLE_SHEET",
+          options: { allDates: true } // Sync all historical and current day records!
+        }, (response) => {
+          btnSyncNow.disabled = false;
+          if (response && response.success) {
+            if (syncIcon) syncIcon.textContent = "✅";
+            if (syncMsg) syncMsg.textContent = `Synced ${response.count} rows successfully to Google Sheet!`;
+            updateGsheetStatusUi({ fg_gsheet_url: url, fg_gsheet_last_sync_status: "SUCCESS" });
+          } else {
+            if (syncIcon) syncIcon.textContent = "⚠️";
+            const err = response?.error || "Unknown sync error";
+            if (syncMsg) syncMsg.textContent = `Sync failed: ${err}`;
+            updateGsheetStatusUi({ fg_gsheet_url: url, fg_gsheet_last_sync_status: "ERROR", fg_gsheet_last_sync_msg: err });
+          }
+
+          setTimeout(() => {
+            if (syncIcon) syncIcon.textContent = "📤";
+          }, 3000);
+        });
+      });
+    });
+  }
+
+  // Export CSV Button
+  if (btnExportCsv) {
+    btnExportCsv.addEventListener("click", exportDailyPnlToCsv);
+  }
+}
+
 // Event Listeners & Boot
 document.addEventListener("DOMContentLoaded", async () => {
   // Read stored data first for instant render
@@ -539,6 +784,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   updateMarketStatusIndicator();
   setInterval(updateMarketStatusIndicator, 1000);
+
+  // Initialize Google Sheet sync & CSV export controls
+  setupGsheetSyncControls();
 
   // Tab Navigation Handling
   const tabBtnPositions = document.getElementById("tabBtnPositions");

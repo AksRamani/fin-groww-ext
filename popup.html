@@ -150,6 +150,48 @@
       </div>
     </section>
 
+    <!-- Google Sheet End-of-Day Sync Card -->
+    <section class="settings-card gsheet-sync-card">
+      <div class="gsheet-header">
+        <div class="setting-info">
+          <div class="setting-title">
+            <span>📊 Google Sheet Sync</span>
+            <span id="gsheetStatusBadge" class="gsheet-badge gsheet-badge-idle">Not Configured</span>
+          </div>
+          <div class="setting-desc" id="gsheetStatusDesc">Auto-appends end-of-day P&L ledger at 3:30 PM IST</div>
+        </div>
+        <button type="button" id="btnToggleGsheetConfig" class="link-btn" title="Configure Webhook URL">⚙️ Config</button>
+      </div>
+
+      <!-- Expandable Config Drawer -->
+      <div id="gsheetConfigBox" class="gsheet-config-box" style="display: none;">
+        <label for="txtGsheetUrl" class="label-xs">GOOGLE APPS SCRIPT WEBHOOK URL</label>
+        <div class="gsheet-input-row">
+          <input type="url" id="txtGsheetUrl" placeholder="https://script.google.com/macros/s/.../exec" class="gsheet-input" spellcheck="false" autocomplete="off">
+          <button type="button" id="btnSaveGsheetUrl" class="btn-primary-sm">Save</button>
+        </div>
+        <div class="setting-row" style="margin-top: 8px;">
+          <div class="setting-info">
+            <span class="setting-title" style="font-size:11px;">Auto-sync at Market Close (3:30 PM IST)</span>
+          </div>
+          <label class="switch switch-sm" title="Automatically send closing figures to Google Sheet at 3:30 PM">
+            <input type="checkbox" id="chkGsheetAutoSync" checked>
+            <span class="slider round"></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="gsheet-actions-row">
+        <button type="button" id="btnSyncGsheetNow" class="btn-gsheet-sync" title="Sync Today's Closing P&L to Google Sheet">
+          <span id="gsheetSyncIcon">📤</span> Sync to Sheet Now
+        </button>
+        <button type="button" id="btnExportCsv" class="btn-export-csv" title="Download Full Daily P&L as CSV file">
+          <span>📥</span> Export CSV
+        </button>
+      </div>
+      <div id="gsheetLastSyncMsg" class="gsheet-last-sync-msg"></div>
+    </section>
+
     <!-- Day-to-Day P&L Records List -->
     <section class="positions-section">
       <div class="section-header">

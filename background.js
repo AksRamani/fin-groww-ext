@@ -344,10 +344,200 @@ async function performMasterSync() {
     // 4. Update Extension Toolbar Badge
     updateBadge(activePositions.length, totalPnl, currentProfile);
 
+    // 5. Check if market closed and Google Sheet auto-sync is due
+    checkEndOfDayAutoSync();
+
   } catch (err) {
     console.error("[FinGroww Background] Master sync error:", err);
   } finally {
     isSyncing = false;
+  }
+}
+
+// Auto-sync to Google Sheet at market close (Mon-Fri after 3:30 PM IST)
+async function checkEndOfDayAutoSync() {
+  try {
+    const stored = await chrome.storage.local.get([
+      "fg_gsheet_url",
+      "fg_gsheet_autosync",
+      "fg_gsheet_last_sync_date"
+    ]);
+
+    if (!stored.fg_gsheet_url || stored.fg_gsheet_autosync === false) {
+      return;
+    }
+
+    const { dateKey } = getIstDateInfo();
+    if (stored.fg_gsheet_last_sync_date === dateKey) {
+      return; // Already auto-synced today!
+    }
+
+    const now = new Date();
+    const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+    const ist = new Date(utc + (3600000 * 5.5));
+    const day = ist.getDay();
+    const isWeekday = day >= 1 && day <= 5;
+    const totalMins = ist.getHours() * 60 + ist.getMinutes();
+
+    // After 3:30 PM IST (930 mins) on a weekday
+    if (isWeekday && totalMins >= 930) {
+      console.log(`[FinGroww Background] Triggering End-of-Day Google Sheet auto-sync for ${dateKey}...`);
+      await syncDailyPnlToGoogleSheet({ targetDate: dateKey });
+    }
+  } catch (e) {
+    console.warn("[FinGroww Background] End-of-day auto sync check error:", e);
+  }
+}
+
+// Sync Daily P&L records to Google Sheets Webhook (Option A: Master Ledger)
+async function syncDailyPnlToGoogleSheet(options = {}) {
+  try {
+    const stored = await chrome.storage.local.get([
+      "fg_gsheet_url",
+      "fg_gsheet_autosync",
+      "fg_gsheet_last_sync_date",
+      "fg_daily_pnl_history"
+    ]);
+
+    const webhookUrl = options.url || stored.fg_gsheet_url;
+    if (!webhookUrl || !webhookUrl.startsWith("http")) {
+      return { success: false, error: "Google Sheet Webhook URL is not configured." };
+    }
+
+    const history = options.dailyHistory || stored.fg_daily_pnl_history || dailyPnlHistory;
+    const historyByUser = history?.byUser || {};
+
+    const { dateKey: todayKey } = getIstDateInfo();
+    const targetDate = options.targetDate || todayKey;
+
+    // Build rows for target date (or all dates if options.allDates is true)
+    const targetDates = options.allDates
+      ? Array.from(new Set(Object.values(historyByUser).flatMap(u => Object.keys(u)))).sort((a, b) => a.localeCompare(b))
+      : [targetDate];
+
+    const rows = [];
+
+    for (const dKey of targetDates) {
+      let combinedTotalPnl = 0;
+      let combinedRealizedPnl = 0;
+      let combinedUnrealizedPnl = 0;
+      let combinedEquity = 0;
+      let combinedTrades = 0;
+      let winningTraders = 0;
+      let losingTraders = 0;
+      let dDisplay = dKey;
+      let dDay = "";
+
+      const userRows = [];
+
+      for (const [userName, userDays] of Object.entries(historyByUser)) {
+        const dayRecord = userDays[dKey];
+        if (!dayRecord) continue;
+
+        dDisplay = dayRecord.displayDate || dKey;
+        dDay = dayRecord.dayName || "";
+
+        const pnl = Number(dayRecord.totalPnl) || 0;
+        const realized = Number(dayRecord.realizedPnl) || 0;
+        const unrealized = Number(dayRecord.unrealizedPnl) || 0;
+        const eq = Number(dayRecord.equity) || 100000;
+        const trades = Number(dayRecord.tradesCount) || 0;
+
+        combinedTotalPnl += pnl;
+        combinedRealizedPnl += realized;
+        combinedUnrealizedPnl += unrealized;
+        combinedEquity += eq;
+        combinedTrades += trades;
+        if (pnl > 0) winningTraders++;
+        else if (pnl < 0) losingTraders++;
+
+        userRows.push({
+          date: dDisplay,
+          dayName: dDay,
+          time: "15:30:00",
+          trader: userName,
+          totalPnl: pnl,
+          realizedPnl: realized,
+          unrealizedPnl: unrealized,
+          equity: eq,
+          tradesCount: trades,
+          status: dayRecord.status || (pnl >= 0 ? "PROFIT" : "LOSS"),
+          notes: `${trades} trades executed`
+        });
+      }
+
+      if (userRows.length > 0) {
+        // Combined Total Row for the entire platform / active users
+        const combinedWinRate = (winningTraders + losingTraders) > 0
+          ? ((winningTraders / (winningTraders + losingTraders)) * 100).toFixed(1) + "%"
+          : "N/A";
+
+        rows.push({
+          date: dDisplay,
+          dayName: dDay,
+          time: "15:30:00",
+          trader: "ALL USERS (Combined)",
+          totalPnl: combinedTotalPnl,
+          realizedPnl: combinedRealizedPnl,
+          unrealizedPnl: combinedUnrealizedPnl,
+          equity: combinedEquity,
+          tradesCount: combinedTrades,
+          status: combinedTotalPnl > 0 ? "PROFIT" : (combinedTotalPnl < 0 ? "LOSS" : "BREAKEVEN"),
+          notes: `Win Rate: ${combinedWinRate} (${winningTraders}W / ${losingTraders}L) • ${userRows.length} Active Traders`
+        });
+
+        // Individual user rows
+        rows.push(...userRows);
+      }
+    }
+
+    if (rows.length === 0) {
+      return { success: false, error: "No daily records found to sync." };
+    }
+
+    // Post to Google Apps Script Webhook
+    // Note: text/plain prevents CORS preflight OPTIONS request
+    const response = await fetch(webhookUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "text/plain;charset=utf-8"
+      },
+      body: JSON.stringify({
+        action: "sync_daily_pnl",
+        source: "FinGroww Chrome Extension",
+        rows: rows
+      })
+    });
+
+    const resultText = await response.text();
+    let resultJson = null;
+    try {
+      resultJson = JSON.parse(resultText);
+    } catch (e) {
+      resultJson = { raw: resultText };
+    }
+
+    const now = Date.now();
+    await chrome.storage.local.set({
+      fg_gsheet_last_sync_date: todayKey,
+      fg_gsheet_last_sync_time: now,
+      fg_gsheet_last_sync_status: "SUCCESS",
+      fg_gsheet_last_sync_msg: `Synced ${rows.length} rows (${resultJson?.inserted || 0} added, ${resultJson?.updated || 0} updated)`
+    });
+
+    return {
+      success: true,
+      count: rows.length,
+      result: resultJson,
+      syncedAt: now
+    };
+  } catch (err) {
+    console.error("[FinGroww Background] Google Sheet sync error:", err);
+    await chrome.storage.local.set({
+      fg_gsheet_last_sync_status: "ERROR",
+      fg_gsheet_last_sync_msg: err.message
+    });
+    return { success: false, error: err.message };
   }
 }
 
@@ -549,6 +739,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.type === "GET_DAILY_PNL") {
     sendResponse({ success: true, dailyPnlHistory: dailyPnlHistory });
     return false;
+  }
+
+  if (request.type === "SYNC_GOOGLE_SHEET") {
+    syncDailyPnlToGoogleSheet(request.options || {}).then(res => {
+      sendResponse(res);
+    }).catch(err => {
+      sendResponse({ success: false, error: err.message });
+    });
+    return true;
   }
 });
 
