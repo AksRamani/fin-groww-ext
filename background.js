@@ -271,10 +271,10 @@ async function performMasterSync() {
 
     const previousData = stored?.fg_latest_data;
 
-    // 2. Fetch Profiles, Running Leaderboard, Session State, and Market Status concurrently
+    // 2. Fetch Profiles, Leaderboard, Session State, and Market Status concurrently
     const [profilesData, leaderboardData, sessionData, marketData] = await Promise.all([
       apiFetch("/api/paper/profiles", {}, 10000),
-      apiFetch("/api/paper/leaderboard?active_only=true", {}, 10000),
+      apiFetch("/api/paper/leaderboard", {}, 10000),
       apiFetch(`/api/paper/session/state?user=${encodeURIComponent(currentProfile)}`, {}, 14000),
       apiFetch("/api/paper/market-status", {}, 8000)
     ]);
@@ -297,18 +297,14 @@ async function performMasterSync() {
       profilesList = previousData.profiles;
     }
 
-    // Leaderboard: retain older leaderboard if current fetch returned null/empty
+    // Leaderboard: retain all real traders from server (include RUNNING, PAUSED, IDLE, etc.)
     const rawLb = leaderboardData?.leaderboard || [];
-    let runningLeaderboard = rawLb.filter(p => p.status === "RUNNING" || p.status === "STOPPED_NEW_TRADES");
-    if (runningLeaderboard.length === 0 && rawLb.length > 0) {
-      runningLeaderboard = rawLb;
+    let runningLeaderboard = rawLb;
+    if (runningLeaderboard.length === 0 && previousData?.leaderboard && previousData.leaderboard.length > 0) {
+      runningLeaderboard = previousData.leaderboard;
     }
     runningLeaderboard.sort((a, b) => (Number(b.net_pnl) || 0) - (Number(a.net_pnl) || 0));
     let leaderboard = runningLeaderboard.map((p, idx) => ({ ...p, rank: idx + 1 }));
-
-    if (leaderboard.length === 0 && previousData?.leaderboard && previousData.leaderboard.length > 0) {
-      leaderboard = previousData.leaderboard;
-    }
 
     // Session Data & Positions: CRITICAL STALE-WHILE-REVALIDATE PROTECTION
     let activePositions = null;
@@ -364,32 +360,53 @@ async function performMasterSync() {
       }
     );
 
-    // Update daily P&L for all active users from leaderboard
-    if (Array.isArray(leaderboard) && leaderboard.length > 0) {
-      leaderboard.forEach(entry => {
-        const u = entry.user_name || entry.name;
+    // Update daily P&L for all profiles with trading activity from profilesList & leaderboard (including PAUSED)
+    const profileMap = new Map();
+    if (Array.isArray(profilesList)) {
+      profilesList.forEach(p => {
+        if (p && p.user_name) profileMap.set(p.user_name, p);
+      });
+    }
+    if (Array.isArray(leaderboard)) {
+      leaderboard.forEach(p => {
+        const u = p.user_name || p.name;
         if (u) {
-          updateDailyPnlRecord(
-            u,
-            {
-              total_pnl: entry.net_pnl !== undefined ? entry.net_pnl : entry.total_pnl,
-              realized_pnl: entry.realized_pnl,
-              unrealized_pnl: entry.unrealized_pnl,
-              account_equity: entry.account_equity || entry.equity
-            },
-            entry.status || "RUNNING",
-            entry.open_positions_count || 0,
-            {
-              total_trades: entry.total_trades,
-              winning_trades: entry.winning_trades,
-              losing_trades: entry.losing_trades,
-              win_rate: entry.win_rate,
-              open_positions_count: entry.open_positions_count
-            }
-          );
+          const prev = profileMap.get(u) || {};
+          profileMap.set(u, { ...prev, ...p });
         }
       });
     }
+
+    profileMap.forEach((entry, u) => {
+      // If this is the currently active profile and we already updated it with fresh sessionData above, skip
+      if (u === currentProfile && sessionData && sessionData.account) return;
+
+      const trades = Number(entry.total_trades) || 0;
+      const pnl = Number(entry.net_pnl !== undefined ? entry.net_pnl : (entry.total_pnl !== undefined ? entry.total_pnl : entry.realized_pnl)) || 0;
+      const realized = Number(entry.realized_pnl) || 0;
+
+      // Include all profiles with trades or P&L
+      if (trades > 0 || pnl !== 0 || realized !== 0) {
+        updateDailyPnlRecord(
+          u,
+          {
+            total_pnl: pnl,
+            realized_pnl: realized,
+            unrealized_pnl: entry.unrealized_pnl,
+            account_equity: entry.account_equity || entry.equity
+          },
+          entry.status || "IDLE",
+          entry.open_positions_count || 0,
+          {
+            total_trades: trades,
+            winning_trades: entry.winning_trades,
+            losing_trades: entry.losing_trades,
+            win_rate: entry.win_rate,
+            open_positions_count: entry.open_positions_count
+          }
+        );
+      }
+    });
 
     // 3. Save to chrome.storage.local -> triggers chrome.storage.onChanged on EVERY OPEN TAB
     const syncPayload = {

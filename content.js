@@ -454,6 +454,17 @@
       color: #4ade80 !important;
     }
 
+    .fg-status-paused {
+      background: rgba(234, 179, 8, 0.1) !important;
+      border: 1px solid rgba(234, 179, 8, 0.28) !important;
+      color: #facc15 !important;
+    }
+
+    .fg-status-paused .fg-status-dot {
+      background: #eab308 !important;
+      box-shadow: 0 0 6px #eab308 !important;
+    }
+
     .fg-status-idle {
       background: rgba(148, 163, 184, 0.1) !important;
       border: 1px solid rgba(148, 163, 184, 0.25) !important;

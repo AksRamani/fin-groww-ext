@@ -77,7 +77,7 @@ function updatePopupUi(payload) {
     }
   }
 
-  // 2. Leaderboard Rank among Running Profiles
+  // 2. Leaderboard Rank among Profiles
   const rankVal = document.getElementById("rankVal");
   const rankBadge = document.getElementById("rankBadge");
   const lb = cachedLeaderboard || [];
@@ -86,16 +86,16 @@ function updatePopupUi(payload) {
 
   if (entry && entry.rank) {
     const r = entry.rank;
-    rankVal.textContent = `Rank #${r} of ${total} Running`;
+    rankVal.textContent = `Rank #${r} of ${total} Profiles`;
     rankBadge.className = "rank-badge" + (r === 1 ? " top-1" : "");
   } else {
     const idx = lb.findIndex((p) => p.user_name === currentProfile);
     if (idx !== -1) {
       const r = idx + 1;
-      rankVal.textContent = `Rank #${r} of ${total} Running`;
+      rankVal.textContent = `Rank #${r} of ${total} Profiles`;
       rankBadge.className = "rank-badge" + (r === 1 ? " top-1" : "");
     } else {
-      rankVal.textContent = `Rank -- of ${total || "--"} Running`;
+      rankVal.textContent = `Rank -- of ${total || "--"} Profiles`;
       rankBadge.className = "rank-badge";
     }
   }
