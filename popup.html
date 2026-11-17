@@ -64,45 +64,113 @@
     </div>
   </section>
 
-  <!-- Open Positions Section -->
-  <section class="positions-section">
-    <div class="section-header">
-      <div class="section-title">
-        <span>ACTIVE OPEN POSITIONS</span>
-        <span id="posCountBadge" class="count-pill">0</span>
-      </div>
-      <div class="live-indicator">
-        <span class="live-dot"></span>
-        <span id="lastUpdatedTime">Syncing...</span>
-      </div>
-    </div>
+  <!-- Navigation Tabs: Open Positions vs Day-to-Day P&L -->
+  <nav class="popup-nav-tabs" role="tablist">
+    <button type="button" class="nav-tab active" id="tabBtnPositions" role="tab" aria-selected="true">
+      <span class="nav-tab-icon">⚡</span> Open Positions
+    </button>
+    <button type="button" class="nav-tab" id="tabBtnDailyPnl" role="tab" aria-selected="false">
+      <span class="nav-tab-icon">📅</span> Day-to-Day P&L
+    </button>
+  </nav>
 
-    <div id="positionsList" class="positions-list">
-      <div class="empty-state">
-        <div class="empty-icon">📊</div>
-        <div class="empty-text">Loading open positions...</div>
-      </div>
-    </div>
-  </section>
-
-  <!-- Market Hours & Visibility Settings -->
-  <section class="settings-card">
-    <div class="setting-row">
-      <div class="setting-info">
-        <div class="setting-title">
-          <span>Show Bar & Pill After Market Closes</span>
+  <!-- Panel 1: Live Open Positions -->
+  <div id="panelPositions" class="tab-panel">
+    <!-- Open Positions Section -->
+    <section class="positions-section">
+      <div class="section-header">
+        <div class="section-title">
+          <span>ACTIVE OPEN POSITIONS</span>
+          <span id="posCountBadge" class="count-pill">0</span>
         </div>
-        <div class="setting-desc" id="marketStatusDesc">
-          <span class="market-status-dot"></span>
-          <span id="marketStatusText">Checking Indian Market Hours (9:00 AM - 3:30 PM IST)...</span>
+        <div class="live-indicator">
+          <span class="live-dot"></span>
+          <span id="lastUpdatedTime">Syncing...</span>
         </div>
       </div>
-      <label class="switch" title="Toggle visibility after Indian market hours">
-        <input type="checkbox" id="toggleShowAfterHours">
-        <span class="slider round"></span>
-      </label>
-    </div>
-  </section>
+
+      <div id="positionsList" class="positions-list">
+        <div class="empty-state">
+          <div class="empty-icon">📊</div>
+          <div class="empty-text">Loading open positions...</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Market Hours & Visibility Settings -->
+    <section class="settings-card">
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-title">
+            <span>Show Bar & Pill After Market Closes</span>
+          </div>
+          <div class="setting-desc" id="marketStatusDesc">
+            <span class="market-status-dot"></span>
+            <span id="marketStatusText">Checking Indian Market Hours (9:00 AM - 3:30 PM IST)...</span>
+          </div>
+        </div>
+        <label class="switch" title="Toggle visibility after Indian market hours">
+          <input type="checkbox" id="toggleShowAfterHours">
+          <span class="slider round"></span>
+        </label>
+      </div>
+    </section>
+  </div>
+
+  <!-- Panel 2: Day-to-Day Profit & Loss History -->
+  <div id="panelDailyPnl" class="tab-panel" style="display: none;">
+    <!-- Profile Selection Row for Daily P&L -->
+    <section class="profile-card daily-user-card">
+      <div class="profile-select-row">
+        <label for="selDailyUser" class="label-xs">FILTER BY TRADER PROFILE</label>
+        <select id="selDailyUser" class="profile-select">
+          <option value="ALL">👥 All Active Users (Combined)</option>
+        </select>
+      </div>
+    </section>
+
+    <!-- Sum of Total Profit, Total Loss & Net P&L KPI Grid -->
+    <section class="daily-kpi-grid">
+      <div class="daily-kpi-card daily-profit-card" title="Sum of all winning days">
+        <div class="daily-kpi-lbl">TOTAL PROFIT</div>
+        <div class="daily-kpi-val val-green" id="dailyTotalProfit">+₹0.00</div>
+        <div class="daily-kpi-sub" id="dailyProfitDaysCount">0 winning days</div>
+      </div>
+
+      <div class="daily-kpi-card daily-loss-card" title="Sum of all losing days">
+        <div class="daily-kpi-lbl">TOTAL LOSS</div>
+        <div class="daily-kpi-val val-red" id="dailyTotalLoss">-₹0.00</div>
+        <div class="daily-kpi-sub" id="dailyLossDaysCount">0 losing days</div>
+      </div>
+
+      <div class="daily-kpi-card daily-net-card" title="Net Total Profit & Loss across recorded days">
+        <div class="daily-kpi-lbl">NET TOTAL P&L</div>
+        <div class="daily-kpi-val" id="dailyNetPnl">₹0.00</div>
+        <div class="daily-kpi-sub" id="dailyWinRate">Win Rate: 0.0%</div>
+      </div>
+    </section>
+
+    <!-- Day-to-Day P&L Records List -->
+    <section class="positions-section">
+      <div class="section-header">
+        <div class="section-title">
+          <span>DAY-TO-DAY P&L HISTORY</span>
+          <span id="dailyDaysCountBadge" class="count-pill">0 Days</span>
+        </div>
+        <div class="live-indicator">
+          <span class="live-dot"></span>
+          <span id="dailySyncTime">Live Synced</span>
+        </div>
+      </div>
+
+      <div id="dailyPnlList" class="daily-pnl-list">
+        <div class="empty-state">
+          <div class="empty-icon">📅</div>
+          <div class="empty-text">Loading daily P&L history...</div>
+        </div>
+      </div>
+    </section>
+  </div>
 
   <!-- Footer -->
   <footer class="app-footer">

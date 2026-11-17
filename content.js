@@ -549,7 +549,168 @@
     .fg-drawer-title-group {
       display: flex !important;
       align-items: center !important;
+      gap: 10px !important;
+    }
+
+    .fg-drawer-tabs {
+      display: inline-flex !important;
+      align-items: center !important;
+      background: rgba(0, 0, 0, 0.4) !important;
+      border: 1px solid rgba(255, 255, 255, 0.08) !important;
+      border-radius: 6px !important;
+      padding: 2px !important;
+      gap: 3px !important;
+    }
+
+    .fg-drawer-tab {
+      background: transparent !important;
+      border: none !important;
+      color: #94a3b8 !important;
+      font-family: inherit !important;
+      font-size: 11px !important;
+      font-weight: 700 !important;
+      padding: 4px 10px !important;
+      border-radius: 4px !important;
+      cursor: pointer !important;
+      transition: all 0.15s ease !important;
+      outline: none !important;
+    }
+
+    .fg-drawer-tab:hover {
+      color: #f8fafc !important;
+      background: rgba(255, 255, 255, 0.06) !important;
+    }
+
+    .fg-drawer-tab.fg-tab-active {
+      background: rgba(56, 189, 248, 0.18) !important;
+      color: #38bdf8 !important;
+      border: 1px solid rgba(56, 189, 248, 0.35) !important;
+    }
+
+    .fg-drawer-daily-bar {
+      display: flex !important;
+      align-items: center !important;
+      justify-content: space-between !important;
+      padding: 8px 16px !important;
+      background: rgba(15, 23, 42, 0.75) !important;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
       gap: 12px !important;
+      flex-wrap: wrap !important;
+    }
+
+    .fg-drawer-daily-kpis {
+      display: flex !important;
+      align-items: center !important;
+      gap: 8px !important;
+      flex-wrap: wrap !important;
+    }
+
+    .fg-drawer-kpi-card {
+      padding: 4px 10px !important;
+      border-radius: 6px !important;
+      font-size: 11px !important;
+      font-weight: 700 !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      gap: 6px !important;
+      font-variant-numeric: tabular-nums !important;
+    }
+
+    .fg-drawer-kpi-profit {
+      background: rgba(34, 197, 94, 0.12) !important;
+      border: 1px solid rgba(34, 197, 94, 0.35) !important;
+      color: #34d399 !important;
+    }
+
+    .fg-drawer-kpi-loss {
+      background: rgba(239, 68, 68, 0.12) !important;
+      border: 1px solid rgba(239, 68, 68, 0.35) !important;
+      color: #f87171 !important;
+    }
+
+    .fg-drawer-kpi-net {
+      background: rgba(56, 189, 248, 0.12) !important;
+      border: 1px solid rgba(56, 189, 248, 0.35) !important;
+      color: #38bdf8 !important;
+    }
+
+    .fg-drawer-tabs-bar {
+      display: flex !important;
+      align-items: center !important;
+      justify-content: space-between !important;
+      padding: 6px 16px !important;
+      background: rgba(11, 15, 23, 0.95) !important;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+      gap: 12px !important;
+      flex-wrap: wrap !important;
+    }
+
+    .fg-drawer-daily-container {
+      padding: 12px 16px !important;
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 10px !important;
+    }
+
+    .fg-daily-card {
+      background: rgba(17, 24, 39, 0.75) !important;
+      border: 1px solid rgba(255, 255, 255, 0.08) !important;
+      border-radius: 8px !important;
+      padding: 10px 14px !important;
+      transition: all 0.15s ease !important;
+    }
+
+    .fg-daily-card:hover {
+      background: rgba(30, 41, 59, 0.8) !important;
+      border-color: rgba(255, 255, 255, 0.15) !important;
+    }
+
+    .fg-daily-card.fg-is-profit {
+      border-left: 3.5px solid #22c55e !important;
+    }
+
+    .fg-daily-card.fg-is-loss {
+      border-left: 3.5px solid #ef4444 !important;
+    }
+
+    .fg-daily-card.fg-is-breakeven {
+      border-left: 3.5px solid #64748b !important;
+    }
+
+    .fg-daily-row-top {
+      display: flex !important;
+      align-items: center !important;
+      justify-content: space-between !important;
+      margin-bottom: 6px !important;
+    }
+
+    .fg-daily-row-bottom {
+      display: flex !important;
+      align-items: center !important;
+      justify-content: space-between !important;
+      font-size: 11px !important;
+      color: #94a3b8 !important;
+    }
+
+    .fg-daily-user-breakdown {
+      margin-top: 8px !important;
+      padding-top: 8px !important;
+      border-top: 1px dashed rgba(255, 255, 255, 0.08) !important;
+      display: flex !important;
+      flex-wrap: wrap !important;
+      gap: 6px !important;
+    }
+
+    .fg-daily-user-pill {
+      font-size: 10px !important;
+      padding: 2px 7px !important;
+      border-radius: 4px !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      gap: 5px !important;
+      background: rgba(0, 0, 0, 0.3) !important;
+      border: 1px solid rgba(255, 255, 255, 0.06) !important;
+      font-variant-numeric: tabular-nums !important;
     }
 
     .fg-drawer-title {
@@ -746,6 +907,9 @@
   let hostEl = null;
   let showAfterHours = false;
   let serverMarketOpen = null;
+  let cachedDailyHistory = null;
+  let drawerActiveTab = "positions"; // "positions" or "daily"
+  let drawerDailyUser = "ALL";
 
   // Indian Market Hours (IST: Mon-Fri 9:00 AM - 3:30 PM)
   function isIndianMarketOpenNow() {
@@ -924,8 +1088,27 @@
           <button type="button" class="fg-btn-icon" id="fg-drawer-close-btn" title="Close Drawer Table">✕</button>
         </div>
       </div>
+      <div class="fg-drawer-tabs-bar">
+        <div class="fg-drawer-tabs">
+          <button type="button" class="fg-drawer-tab fg-tab-active" id="fg-tab-positions">
+            ⚡ Open Positions (<span id="fg-tab-positions-count">0</span>)
+          </button>
+          <button type="button" class="fg-drawer-tab" id="fg-tab-daily-pnl">
+            📅 Day-to-Day P&L
+          </button>
+        </div>
+        <div class="fg-drawer-tab-actions" id="fg-drawer-daily-actions" style="display:none;align-items:center;gap:8px;">
+          <label style="font-size:11px;color:#94a3b8;font-weight:600;">Trader:</label>
+          <select class="fg-drawer-select" id="fg-drawer-daily-user-select" title="Filter Day-to-Day P&L by Trader">
+            <option value="ALL">👥 All Active Users (Combined)</option>
+          </select>
+        </div>
+      </div>
       <div class="fg-drawer-body" id="fg-drawer-table-wrap">
         <!-- Rendered by renderDrawerTable() -->
+      </div>
+      <div class="fg-drawer-body" id="fg-drawer-daily-wrap" style="display:none;">
+        <!-- Rendered by renderDrawerDailyPnl() -->
       </div>
     `;
     shadowRoot.appendChild(drawer);
@@ -1083,7 +1266,13 @@
       drawer.classList.toggle("fg-drawer-open", isDrawerOpen);
       const icon = shadowRoot.getElementById("fg-drawer-icon");
       if (icon) icon.textContent = isDrawerOpen ? "▼" : "▲";
-      if (isDrawerOpen) renderDrawerTable();
+      if (isDrawerOpen) {
+        if (drawerActiveTab === "daily") {
+          renderDrawerDailyPnl();
+        } else {
+          renderDrawerTable();
+        }
+      }
     };
 
     drawerToggleBtn.addEventListener("click", toggleDrawer);
@@ -1094,6 +1283,45 @@
       const icon = shadowRoot.getElementById("fg-drawer-icon");
       if (icon) icon.textContent = "▲";
     });
+
+    // Drawer Tabs: Open Positions vs Day-to-Day P&L
+    const tabPositions = shadowRoot.getElementById("fg-tab-positions");
+    const tabDailyPnl = shadowRoot.getElementById("fg-tab-daily-pnl");
+    const tableWrap = shadowRoot.getElementById("fg-drawer-table-wrap");
+    const dailyWrap = shadowRoot.getElementById("fg-drawer-daily-wrap");
+    const dailyActions = shadowRoot.getElementById("fg-drawer-daily-actions");
+
+    if (tabPositions) {
+      tabPositions.addEventListener("click", () => {
+        drawerActiveTab = "positions";
+        tabPositions.classList.add("fg-tab-active");
+        tabDailyPnl?.classList.remove("fg-tab-active");
+        if (tableWrap) tableWrap.style.display = "block";
+        if (dailyWrap) dailyWrap.style.display = "none";
+        if (dailyActions) dailyActions.style.display = "none";
+        renderDrawerTable();
+      });
+    }
+
+    if (tabDailyPnl) {
+      tabDailyPnl.addEventListener("click", () => {
+        drawerActiveTab = "daily";
+        tabDailyPnl.classList.add("fg-tab-active");
+        tabPositions?.classList.remove("fg-tab-active");
+        if (tableWrap) tableWrap.style.display = "none";
+        if (dailyWrap) dailyWrap.style.display = "block";
+        if (dailyActions) dailyActions.style.display = "flex";
+        renderDrawerDailyPnl();
+      });
+    }
+
+    const drawerDailyUserSel = shadowRoot.getElementById("fg-drawer-daily-user-select");
+    if (drawerDailyUserSel) {
+      drawerDailyUserSel.addEventListener("change", (e) => {
+        drawerDailyUser = e.target.value;
+        renderDrawerDailyPnl();
+      });
+    }
 
     // Helper to toggle and persist minimized state across tabs and refreshes
     const setMinimizedState = (minimized) => {
@@ -1280,6 +1508,10 @@
     const { profile, account, positions, status, leaderboard, profiles } = payload;
     if (profile) currentProfile = profile;
 
+    if (payload.daily_pnl_history) {
+      cachedDailyHistory = payload.daily_pnl_history;
+    }
+
     // Retain older account metrics if incoming is empty/undefined
     if (account && Object.keys(account).length > 0) {
       accountData = account;
@@ -1321,13 +1553,21 @@
       renderPositionsTicker({});
     }
 
+    // Update open positions tab counter
+    const countEl = shadowRoot.getElementById("fg-tab-positions-count");
+    if (countEl) countEl.textContent = activePositions.length;
+
     renderProfileSelectors();
     renderAccountMetrics(status);
     renderRank();
     renderDrawerMeta();
 
     if (isDrawerOpen) {
-      renderDrawerTable();
+      if (drawerActiveTab === "daily") {
+        renderDrawerDailyPnl();
+      } else {
+        renderDrawerTable();
+      }
     }
   }
 
@@ -1335,6 +1575,7 @@
   function renderProfileSelectors() {
     const barSel = shadowRoot?.getElementById("fg-bar-profile-select");
     const drawerSel = shadowRoot?.getElementById("fg-drawer-profile-select");
+    const dailyUserSel = shadowRoot?.getElementById("fg-drawer-daily-user-select");
 
     if (profilesList && profilesList.length > 0) {
       const optionsHtml = profilesList.map((p) => {
@@ -1351,6 +1592,29 @@
         drawerSel.innerHTML = optionsHtml;
         drawerSel.value = currentProfile;
       }
+    }
+
+    // Populate Daily P&L user filter
+    if (dailyUserSel) {
+      const userSet = new Set();
+      Object.keys(cachedDailyHistory?.byUser || {}).forEach(u => userSet.add(u));
+      profilesList.forEach(p => {
+        const u = typeof p === "string" ? p : p.user_name;
+        if (u) userSet.add(u);
+      });
+      leaderboardData.forEach(p => {
+        const u = p.user_name || p.name;
+        if (u) userSet.add(u);
+      });
+
+      const userList = Array.from(userSet).sort();
+      const currentVal = drawerDailyUser || "ALL";
+
+      dailyUserSel.innerHTML = `
+        <option value="ALL" ${currentVal === "ALL" ? "selected" : ""}>👥 All Active Users (Combined)</option>
+        ${userList.map(u => `<option value="${u}" ${currentVal === u ? "selected" : ""}>👤 ${u}</option>`).join("")}
+      `;
+      dailyUserSel.value = currentVal;
     }
   }
 
@@ -1636,9 +1900,209 @@
     });
   }
 
+  // Compute Day-to-Day P&L Summary & Records for selected user or ALL users
+  function computeDailyPnlSummary(historyByUser, targetUser = "ALL") {
+    let records = [];
+
+    if (targetUser === "ALL") {
+      const dateMap = {};
+      for (const [user, userDays] of Object.entries(historyByUser || {})) {
+        for (const [dateKey, dayData] of Object.entries(userDays || {})) {
+          if (!dateMap[dateKey]) {
+            dateMap[dateKey] = {
+              date: dateKey,
+              displayDate: dayData.displayDate || dateKey,
+              dayName: dayData.dayName || "",
+              totalPnl: 0,
+              realizedPnl: 0,
+              unrealizedPnl: 0,
+              tradesCount: 0,
+              winningUsers: 0,
+              losingUsers: 0,
+              userBreakdown: []
+            };
+          }
+          const pnl = Number(dayData.totalPnl) || 0;
+          dateMap[dateKey].totalPnl += pnl;
+          dateMap[dateKey].realizedPnl += Number(dayData.realizedPnl) || 0;
+          dateMap[dateKey].unrealizedPnl += Number(dayData.unrealizedPnl) || 0;
+          dateMap[dateKey].tradesCount += Number(dayData.tradesCount) || 0;
+          if (pnl > 0) dateMap[dateKey].winningUsers++;
+          else if (pnl < 0) dateMap[dateKey].losingUsers++;
+
+          dateMap[dateKey].userBreakdown.push({
+            user: user,
+            pnl: pnl,
+            tradesCount: dayData.tradesCount || 0,
+            status: dayData.status || "RUNNING"
+          });
+        }
+      }
+      records = Object.values(dateMap);
+    } else {
+      const userDays = (historyByUser && historyByUser[targetUser]) || {};
+      records = Object.values(userDays).map(d => ({
+        ...d,
+        user: targetUser
+      }));
+    }
+
+    records.sort((a, b) => b.date.localeCompare(a.date));
+
+    let totalProfit = 0;
+    let totalLoss = 0;
+    let netPnl = 0;
+    let winDaysCount = 0;
+    let lossDaysCount = 0;
+    let breakevenDaysCount = 0;
+
+    for (const r of records) {
+      const pnl = Number(r.totalPnl) || 0;
+      netPnl += pnl;
+      if (pnl > 0) {
+        totalProfit += pnl;
+        winDaysCount++;
+      } else if (pnl < 0) {
+        totalLoss += Math.abs(pnl);
+        lossDaysCount++;
+      } else {
+        breakevenDaysCount++;
+      }
+    }
+
+    const totalTradingDays = records.length;
+    const winRate = totalTradingDays > 0 ? (winDaysCount / totalTradingDays) * 100 : 0;
+
+    return {
+      records,
+      totalProfit,
+      totalLoss,
+      netPnl,
+      winDaysCount,
+      lossDaysCount,
+      breakevenDaysCount,
+      totalTradingDays,
+      winRate
+    };
+  }
+
+  // Render Day-to-Day Profit & Loss Tab in the Drawer
+  function renderDrawerDailyPnl() {
+    const wrap = shadowRoot?.getElementById("fg-drawer-daily-wrap");
+    if (!wrap) return;
+
+    const historyByUser = cachedDailyHistory?.byUser || {};
+    const summary = computeDailyPnlSummary(historyByUser, drawerDailyUser);
+
+    let todayKey = "";
+    try {
+      todayKey = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+    } catch (e) {
+      todayKey = new Date().toISOString().slice(0, 10);
+    }
+
+    const netSign = summary.netPnl > 0 ? "+" : "";
+    const netClass = summary.netPnl > 0 ? "fg-drawer-kpi-profit" : (summary.netPnl < 0 ? "fg-drawer-kpi-loss" : "fg-drawer-kpi-net");
+
+    wrap.innerHTML = `
+      <div class="fg-drawer-daily-bar">
+        <div class="fg-drawer-daily-kpis">
+          <div class="fg-drawer-kpi-card fg-drawer-kpi-profit" title="Sum of all positive daily profits">
+            <span>📈 Profit:</span>
+            <span>+${formatInr(summary.totalProfit)}</span>
+            <span style="opacity:0.75;font-size:10px;">(${summary.winDaysCount}W)</span>
+          </div>
+          <div class="fg-drawer-kpi-card fg-drawer-kpi-loss" title="Sum of all daily losses">
+            <span>📉 Loss:</span>
+            <span>-${formatInr(summary.totalLoss)}</span>
+            <span style="opacity:0.75;font-size:10px;">(${summary.lossDaysCount}L)</span>
+          </div>
+          <div class="fg-drawer-kpi-card ${netClass}" title="Net Overall P&L = Total Profit - Total Loss">
+            <span>💰 Net Total P&L:</span>
+            <span>${netSign}${formatInr(summary.netPnl)}</span>
+          </div>
+          <div class="fg-drawer-meta-pill" title="Win Rate percentage across trading days">
+            🎯 Win Rate: <strong>${summary.winRate.toFixed(1)}%</strong>
+          </div>
+        </div>
+        <div style="font-size:11px;color:#94a3b8;font-weight:600;">
+          Showing: <span style="color:#38bdf8;">${drawerDailyUser === "ALL" ? "All Active Users" : drawerDailyUser}</span> • ${summary.totalTradingDays} Days Logged
+        </div>
+      </div>
+      <div class="fg-drawer-daily-container">
+        ${summary.records.length === 0 ? `
+          <div style="padding:28px 20px;text-align:center;color:#8b949e;">
+            <div style="font-size:13px;font-weight:700;color:#c9d1d9;">No Day-to-Day Records Found</div>
+            <div style="font-size:11px;margin-top:4px;">No trading history logged yet for <strong>${drawerDailyUser}</strong>.</div>
+          </div>
+        ` : summary.records.map((r) => {
+          const pnl = Number(r.totalPnl) || 0;
+          const isProfit = pnl > 0;
+          const isLoss = pnl < 0;
+          const isToday = r.date === todayKey;
+          const cardClass = isProfit ? "fg-is-profit" : (isLoss ? "fg-is-loss" : "fg-is-breakeven");
+          const pillClass = isProfit ? "fg-tbl-profit" : (isLoss ? "fg-tbl-loss" : "");
+          const pnlSign = isProfit ? "+" : "";
+
+          return `
+            <div class="fg-daily-card ${cardClass}">
+              <div class="fg-daily-row-top">
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <span style="font-weight:800;color:#f8fafc;font-size:12.5px;">${r.displayDate}</span>
+                  <span style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px;background:rgba(255,255,255,0.08);color:#94a3b8;">${r.dayName}</span>
+                  ${isToday ? `<span style="font-size:10px;font-weight:800;padding:1px 6px;border-radius:4px;background:rgba(56,189,248,0.2);color:#38bdf8;">TODAY</span>` : ""}
+                </div>
+                <div>
+                  <span class="fg-tbl-pill ${pillClass}" style="font-size:12px;font-weight:800;padding:3px 8px;">
+                    ${pnlSign}${formatInr(pnl)}
+                  </span>
+                </div>
+              </div>
+              <div class="fg-daily-row-bottom">
+                <div>
+                  ${drawerDailyUser === "ALL" ? `
+                    <span>👥 Active Users: <strong style="color:#e2e8f0;">${r.userBreakdown?.length || 0}</strong> (<span style="color:#34d399;">${r.winningUsers || 0} Profit</span> / <span style="color:#f87171;">${r.losingUsers || 0} Loss</span>)</span>
+                  ` : `
+                    <span>👤 Trader: <strong style="color:#38bdf8;">${r.user}</strong> • Status: <strong style="color:#e2e8f0;">${r.status || "RUNNING"}</strong></span>
+                  `}
+                </div>
+                <div>
+                  <span>Trades Executed: <strong style="color:#e2e8f0;">${r.tradesCount || 0}</strong></span>
+                </div>
+              </div>
+              ${drawerDailyUser === "ALL" && r.userBreakdown && r.userBreakdown.length > 0 ? `
+                <div class="fg-daily-user-breakdown">
+                  ${r.userBreakdown.map((u) => {
+                    const uPnl = Number(u.pnl) || 0;
+                    const uColor = uPnl > 0 ? "#34d399" : (uPnl < 0 ? "#f87171" : "#94a3b8");
+                    const uSign = uPnl > 0 ? "+" : "";
+                    return `
+                      <span class="fg-daily-user-pill">
+                        <span style="color:#94a3b8;">👤 ${u.user}:</span>
+                        <strong style="color:${uColor};">${uSign}${formatInr(uPnl)}</strong>
+                        <span style="opacity:0.6;font-size:9px;">(${u.tradesCount}T)</span>
+                      </span>
+                    `;
+                  }).join("")}
+                </div>
+              ` : ""}
+            </div>
+          `;
+        }).join("")}
+      </div>
+    `;
+  }
+
   // Real-time synchronization listener: listens to background sync on ALL tabs
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === "local") {
+      if (changes.fg_daily_pnl_history) {
+        cachedDailyHistory = changes.fg_daily_pnl_history.newValue;
+        renderProfileSelectors();
+        if (isDrawerOpen && drawerActiveTab === "daily") {
+          renderDrawerDailyPnl();
+        }
+      }
       if (changes.fg_pill_pos && changes.fg_pill_pos.newValue) {
         const pos = changes.fg_pill_pos.newValue;
         const restoreBtn = shadowRoot?.getElementById("fg-ide-restore-btn");
@@ -1743,7 +2207,10 @@
     setInterval(updateMarketVisibility, 1000);
 
     try {
-      const stored = await chrome.storage.local.get(["fg_latest_data", "fg_selected_profile", "fg_is_minimized", "fg_pill_pos", "fg_show_after_hours"]);
+      const stored = await chrome.storage.local.get(["fg_latest_data", "fg_selected_profile", "fg_is_minimized", "fg_pill_pos", "fg_show_after_hours", "fg_daily_pnl_history"]);
+      if (stored.fg_daily_pnl_history) {
+        cachedDailyHistory = stored.fg_daily_pnl_history;
+      }
       if (stored.fg_show_after_hours !== undefined) {
         showAfterHours = stored.fg_show_after_hours === true;
       }

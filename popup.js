@@ -9,6 +9,9 @@ let cachedAccount = {};
 let cachedPositions = [];
 let cachedLeaderboard = [];
 let cachedProfiles = [];
+let cachedDailyHistory = null;
+let selectedDailyUser = "ALL";
+let activeTab = "positions";
 
 // Currency formatting
 function formatInr(val) {
@@ -264,20 +267,266 @@ function updateMarketStatusIndicator(isOpenFromServer) {
   }
 }
 
+// Compute Day-to-Day P&L Summary & Records for selected user or ALL users
+function computeDailyPnlSummary(historyByUser, targetUser = "ALL") {
+  let records = [];
+
+  if (targetUser === "ALL") {
+    const dateMap = {};
+    for (const [user, userDays] of Object.entries(historyByUser || {})) {
+      for (const [dateKey, dayData] of Object.entries(userDays || {})) {
+        if (!dateMap[dateKey]) {
+          dateMap[dateKey] = {
+            date: dateKey,
+            displayDate: dayData.displayDate || dateKey,
+            dayName: dayData.dayName || "",
+            totalPnl: 0,
+            realizedPnl: 0,
+            unrealizedPnl: 0,
+            tradesCount: 0,
+            winningUsers: 0,
+            losingUsers: 0,
+            userBreakdown: []
+          };
+        }
+        const pnl = Number(dayData.totalPnl) || 0;
+        dateMap[dateKey].totalPnl += pnl;
+        dateMap[dateKey].realizedPnl += Number(dayData.realizedPnl) || 0;
+        dateMap[dateKey].unrealizedPnl += Number(dayData.unrealizedPnl) || 0;
+        dateMap[dateKey].tradesCount += Number(dayData.tradesCount) || 0;
+        if (pnl > 0) dateMap[dateKey].winningUsers++;
+        else if (pnl < 0) dateMap[dateKey].losingUsers++;
+
+        dateMap[dateKey].userBreakdown.push({
+          user: user,
+          pnl: pnl,
+          tradesCount: dayData.tradesCount || 0,
+          status: dayData.status || "RUNNING"
+        });
+      }
+    }
+    records = Object.values(dateMap);
+  } else {
+    const userDays = (historyByUser && historyByUser[targetUser]) || {};
+    records = Object.values(userDays).map(d => ({
+      ...d,
+      user: targetUser
+    }));
+  }
+
+  // Sort descending by date (newest session first)
+  records.sort((a, b) => b.date.localeCompare(a.date));
+
+  let totalProfit = 0;
+  let totalLoss = 0;
+  let netPnl = 0;
+  let winDaysCount = 0;
+  let lossDaysCount = 0;
+  let breakevenDaysCount = 0;
+
+  for (const r of records) {
+    const pnl = Number(r.totalPnl) || 0;
+    netPnl += pnl;
+    if (pnl > 0) {
+      totalProfit += pnl;
+      winDaysCount++;
+    } else if (pnl < 0) {
+      totalLoss += Math.abs(pnl);
+      lossDaysCount++;
+    } else {
+      breakevenDaysCount++;
+    }
+  }
+
+  const totalTradingDays = records.length;
+  const winRate = totalTradingDays > 0 ? (winDaysCount / totalTradingDays) * 100 : 0;
+
+  return {
+    records,
+    totalProfit,
+    totalLoss,
+    netPnl,
+    winDaysCount,
+    lossDaysCount,
+    breakevenDaysCount,
+    totalTradingDays,
+    winRate
+  };
+}
+
+// Render Day-to-Day Profit & Loss View (User-Wise & All Active Users)
+function renderDailyPnlView() {
+  const historyByUser = cachedDailyHistory?.byUser || {};
+
+  // 1. Populate User Filter Dropdown
+  const selDailyUser = document.getElementById("selDailyUser");
+  if (selDailyUser) {
+    // Gather unique users from history, profiles, and leaderboard
+    const userSet = new Set();
+    Object.keys(historyByUser).forEach(u => userSet.add(u));
+    cachedProfiles.forEach(p => {
+      const u = typeof p === "string" ? p : p.user_name;
+      if (u) userSet.add(u);
+    });
+    cachedLeaderboard.forEach(p => {
+      const u = p.user_name || p.name;
+      if (u) userSet.add(u);
+    });
+
+    const userList = Array.from(userSet).sort();
+    const currentVal = selectedDailyUser || "ALL";
+
+    selDailyUser.innerHTML = `
+      <option value="ALL" ${currentVal === "ALL" ? "selected" : ""}>👥 All Active Users (Combined)</option>
+      ${userList.map(u => `<option value="${u}" ${currentVal === u ? "selected" : ""}>👤 ${u}</option>`).join("")}
+    `;
+    selDailyUser.value = currentVal;
+  }
+
+  // 2. Compute Summary Metrics
+  const summary = computeDailyPnlSummary(historyByUser, selectedDailyUser);
+
+  const profitEl = document.getElementById("dailyTotalProfit");
+  const profitSubEl = document.getElementById("dailyProfitDaysCount");
+  const lossEl = document.getElementById("dailyTotalLoss");
+  const lossSubEl = document.getElementById("dailyLossDaysCount");
+  const netEl = document.getElementById("dailyNetPnl");
+  const winRateEl = document.getElementById("dailyWinRate");
+  const countBadge = document.getElementById("dailyDaysCountBadge");
+  const syncTimeEl = document.getElementById("dailySyncTime");
+
+  if (profitEl) profitEl.textContent = "+" + formatInr(summary.totalProfit);
+  if (profitSubEl) profitSubEl.textContent = `${summary.winDaysCount} winning day${summary.winDaysCount === 1 ? "" : "s"}`;
+  if (lossEl) lossEl.textContent = "-" + formatInr(summary.totalLoss);
+  if (lossSubEl) lossSubEl.textContent = `${summary.lossDaysCount} losing day${summary.lossDaysCount === 1 ? "" : "s"}`;
+
+  if (netEl) {
+    const sign = summary.netPnl > 0 ? "+" : "";
+    netEl.textContent = sign + formatInr(summary.netPnl);
+    netEl.className = "daily-kpi-val " + (summary.netPnl > 0 ? "val-green" : (summary.netPnl < 0 ? "val-red" : ""));
+  }
+
+  if (winRateEl) {
+    winRateEl.textContent = `Win Rate: ${summary.winRate.toFixed(1)}% (${summary.winDaysCount}W - ${summary.lossDaysCount}L)`;
+  }
+  if (countBadge) countBadge.textContent = `${summary.totalTradingDays} Days`;
+  if (syncTimeEl) {
+    const now = new Date();
+    syncTimeEl.textContent = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
+
+  // 3. Render Day Cards List
+  const listContainer = document.getElementById("dailyPnlList");
+  if (!listContainer) return;
+
+  if (summary.records.length === 0) {
+    listContainer.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">📅</div>
+        <div class="empty-text">No daily history recorded for <strong>${selectedDailyUser === "ALL" ? "active users" : selectedDailyUser}</strong></div>
+      </div>
+    `;
+    return;
+  }
+
+  let todayKey = "";
+  try {
+    todayKey = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+  } catch (e) {
+    todayKey = new Date().toISOString().slice(0, 10);
+  }
+
+  listContainer.innerHTML = summary.records.map((r, idx) => {
+    const pnl = Number(r.totalPnl) || 0;
+    const isProfit = pnl > 0;
+    const isLoss = pnl < 0;
+    const isToday = r.date === todayKey;
+
+    const rowClass = isProfit ? "is-profit" : (isLoss ? "is-loss" : "is-breakeven");
+    const pillClass = isProfit ? "pill-profit" : (isLoss ? "pill-loss" : "pill-neutral");
+    const pnlSign = isProfit ? "+" : "";
+
+    const userLabel = selectedDailyUser === "ALL" 
+      ? `👥 ${r.userBreakdown?.length || 0} Traders (${r.winningUsers || 0}W / ${r.losingUsers || 0}L)`
+      : `👤 ${r.user || selectedDailyUser}`;
+
+    const tradesLabel = `${r.tradesCount || 0} trade${r.tradesCount === 1 ? "" : "s"}`;
+
+    const breakdownHtml = (selectedDailyUser === "ALL" && r.userBreakdown && r.userBreakdown.length > 0)
+      ? `
+        <div class="daily-users-breakdown" id="breakdown-${idx}">
+          ${r.userBreakdown.map(ub => {
+            const uPnl = Number(ub.pnl) || 0;
+            const uSign = uPnl > 0 ? "+" : "";
+            const uColor = uPnl > 0 ? "val-green" : (uPnl < 0 ? "val-red" : "");
+            return `
+              <div class="daily-user-breakdown-row">
+                <span style="font-weight:600;color:#c9d1d9;">${ub.user}</span>
+                <span style="color:#8b949e;">${ub.tradesCount || 0} trades</span>
+                <span class="${uColor}" style="font-weight:700;font-family:var(--font-mono);">${uSign}${formatInr(uPnl)}</span>
+              </div>
+            `;
+          }).join("")}
+        </div>
+      `
+      : "";
+
+    return `
+      <div class="daily-pnl-item ${rowClass}">
+        <div class="daily-item-top">
+          <div class="daily-date-group">
+            <span class="daily-date-title">${r.displayDate || r.date}</span>
+            <span class="daily-day-badge">${r.dayName || ""}</span>
+            ${isToday ? `<span class="daily-today-badge">Today</span>` : ""}
+          </div>
+          <span class="daily-pnl-pill ${pillClass}">
+            ${pnlSign}${formatInr(pnl)}
+          </span>
+        </div>
+
+        <div class="daily-item-bottom">
+          <span class="daily-user-tag">${userLabel}</span>
+          <span class="daily-trades-tag">📊 ${tradesLabel}</span>
+        </div>
+
+        ${breakdownHtml}
+      </div>
+    `;
+  }).join("");
+}
+
 // Event Listeners & Boot
 document.addEventListener("DOMContentLoaded", async () => {
   // Read stored data first for instant render
   try {
-    const stored = await chrome.storage.local.get(["fg_latest_data", "fg_selected_profile", "fg_show_after_hours"]);
+    const stored = await chrome.storage.local.get([
+      "fg_latest_data",
+      "fg_selected_profile",
+      "fg_show_after_hours",
+      "fg_daily_pnl_history",
+      "fg_profiles_cache"
+    ]);
+
     if (stored && stored.fg_selected_profile) {
       currentProfile = stored.fg_selected_profile;
     }
+    if (stored && stored.fg_profiles_cache) {
+      cachedProfiles = stored.fg_profiles_cache;
+    }
+    if (stored && stored.fg_daily_pnl_history) {
+      cachedDailyHistory = stored.fg_daily_pnl_history;
+    }
     if (stored && stored.fg_latest_data) {
       updatePopupUi(stored.fg_latest_data);
+      if (stored.fg_latest_data.daily_pnl) {
+        cachedDailyHistory = stored.fg_latest_data.daily_pnl;
+      }
       if (typeof stored.fg_latest_data.is_market_open === "boolean") {
         updateMarketStatusIndicator(stored.fg_latest_data.is_market_open);
       }
     }
+
+    renderDailyPnlView();
 
     const toggleShow = document.getElementById("toggleShowAfterHours");
     if (toggleShow) {
@@ -290,6 +539,44 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   updateMarketStatusIndicator();
   setInterval(updateMarketStatusIndicator, 1000);
+
+  // Tab Navigation Handling
+  const tabBtnPositions = document.getElementById("tabBtnPositions");
+  const tabBtnDailyPnl = document.getElementById("tabBtnDailyPnl");
+  const panelPositions = document.getElementById("panelPositions");
+  const panelDailyPnl = document.getElementById("panelDailyPnl");
+
+  function switchTab(tab) {
+    activeTab = tab;
+    if (tab === "positions") {
+      tabBtnPositions.classList.add("active");
+      tabBtnPositions.setAttribute("aria-selected", "true");
+      tabBtnDailyPnl.classList.remove("active");
+      tabBtnDailyPnl.setAttribute("aria-selected", "false");
+      if (panelPositions) panelPositions.style.display = "block";
+      if (panelDailyPnl) panelDailyPnl.style.display = "none";
+    } else {
+      tabBtnDailyPnl.classList.add("active");
+      tabBtnDailyPnl.setAttribute("aria-selected", "true");
+      tabBtnPositions.classList.remove("active");
+      tabBtnPositions.setAttribute("aria-selected", "false");
+      if (panelDailyPnl) panelDailyPnl.style.display = "block";
+      if (panelPositions) panelPositions.style.display = "none";
+      renderDailyPnlView();
+    }
+  }
+
+  if (tabBtnPositions) tabBtnPositions.addEventListener("click", () => switchTab("positions"));
+  if (tabBtnDailyPnl) tabBtnDailyPnl.addEventListener("click", () => switchTab("dailyPnl"));
+
+  // Daily P&L User Filter Change
+  const selDailyUser = document.getElementById("selDailyUser");
+  if (selDailyUser) {
+    selDailyUser.addEventListener("change", (e) => {
+      selectedDailyUser = e.target.value;
+      renderDailyPnlView();
+    });
+  }
 
   // Request fresh sync from background
   chrome.runtime.sendMessage({ type: "FORCE_REFRESH" });
@@ -304,8 +591,16 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (changes.fg_selected_profile) {
         currentProfile = changes.fg_selected_profile.newValue || currentProfile;
       }
+      if (changes.fg_daily_pnl_history) {
+        cachedDailyHistory = changes.fg_daily_pnl_history.newValue;
+        renderDailyPnlView();
+      }
       if (changes.fg_latest_data) {
         updatePopupUi(changes.fg_latest_data.newValue);
+        if (changes.fg_latest_data.newValue?.daily_pnl) {
+          cachedDailyHistory = changes.fg_latest_data.newValue.daily_pnl;
+          renderDailyPnlView();
+        }
         if (typeof changes.fg_latest_data.newValue?.is_market_open === "boolean") {
           updateMarketStatusIndicator(changes.fg_latest_data.newValue.is_market_open);
         }

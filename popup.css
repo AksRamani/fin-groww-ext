@@ -608,3 +608,253 @@ input:checked + .slider:before {
   background-color: #0d1117;
 }
 
+/* ========================================================
+   Navigation Tabs: Open Positions vs Day-to-Day P&L
+   ======================================================== */
+.popup-nav-tabs {
+  display: flex;
+  gap: 8px;
+  padding: 8px 14px;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+}
+
+.nav-tab {
+  flex: 1;
+  padding: 7px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-main);
+  color: var(--text-dim);
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  outline: none;
+}
+
+.nav-tab:hover {
+  color: var(--text-main);
+  border-color: var(--cyan);
+  background: var(--bg-hover);
+}
+
+.nav-tab.active {
+  background: var(--cyan-dim);
+  border-color: var(--cyan);
+  color: var(--cyan);
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.2);
+}
+
+.nav-tab-icon {
+  font-size: 12px;
+}
+
+/* ========================================================
+   Day-to-Day P&L History Panel
+   ======================================================== */
+.daily-user-card {
+  margin-top: 8px;
+  margin-bottom: 8px;
+}
+
+.daily-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  padding: 0 14px 10px 14px;
+}
+
+.daily-kpi-card {
+  padding: 8px 6px;
+  border-radius: 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.daily-profit-card {
+  border-color: rgba(63, 185, 80, 0.35);
+  background: rgba(63, 185, 80, 0.08);
+}
+
+.daily-loss-card {
+  border-color: rgba(248, 81, 73, 0.35);
+  background: rgba(248, 81, 73, 0.08);
+}
+
+.daily-net-card {
+  border-color: rgba(56, 189, 248, 0.3);
+  background: rgba(56, 189, 248, 0.06);
+}
+
+.daily-kpi-lbl {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 2px;
+}
+
+.daily-kpi-val {
+  font-size: 12.5px;
+  font-weight: 800;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+.daily-kpi-sub {
+  font-size: 9px;
+  color: var(--text-dim);
+  margin-top: 2px;
+  white-space: nowrap;
+}
+
+.daily-pnl-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 14px 14px 14px;
+}
+
+.daily-pnl-item {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  transition: all 0.2s ease;
+}
+
+.daily-pnl-item:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: var(--bg-hover);
+}
+
+.daily-pnl-item.is-profit {
+  border-left: 3.5px solid var(--green);
+}
+
+.daily-pnl-item.is-loss {
+  border-left: 3.5px solid var(--red);
+}
+
+.daily-pnl-item.is-breakeven {
+  border-left: 3.5px solid var(--text-dim);
+}
+
+.daily-item-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 5px;
+}
+
+.daily-date-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.daily-date-title {
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--text-main);
+}
+
+.daily-day-badge {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-dim);
+  text-transform: uppercase;
+}
+
+.daily-today-badge {
+  font-size: 9px;
+  font-weight: 800;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(56, 189, 248, 0.2);
+  color: var(--cyan);
+  text-transform: uppercase;
+}
+
+.daily-pnl-pill {
+  font-size: 12px;
+  font-weight: 800;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  padding: 2px 7px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.daily-pnl-pill.pill-profit {
+  background: rgba(63, 185, 80, 0.16);
+  color: var(--green);
+  border: 1px solid rgba(63, 185, 80, 0.4);
+}
+
+.daily-pnl-pill.pill-loss {
+  background: rgba(248, 81, 73, 0.16);
+  color: var(--red);
+  border: 1px solid rgba(248, 81, 73, 0.4);
+}
+
+.daily-pnl-pill.pill-neutral {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+}
+
+.daily-item-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 10.5px;
+  color: var(--text-dim);
+}
+
+.daily-user-tag {
+  color: var(--cyan);
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.daily-trades-tag {
+  color: var(--text-muted);
+}
+
+.daily-users-breakdown {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.daily-user-breakdown-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 10px;
+  padding: 2px 4px;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.2);
+}
+
