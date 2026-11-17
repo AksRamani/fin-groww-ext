@@ -13,19 +13,10 @@ let cachedDailyHistory = null;
 let selectedDailyUser = "";
 let activeTab = "positions";
 
-const DUMMY_MOCK_PROFILES = [
-  "Options-Hedger-X",
-  "BankNifty-Delta-9",
-  "Trend-Follower-55",
-  "Alpha-Scalper-01",
-  "Nifty-Momentum-Pro"
-];
-
-function purgeDummyFromHistory(history) {
+function filterRealHistory(history) {
   if (!history || !history.byUser) return { byUser: {} };
   const cleanByUser = {};
   for (const [user, days] of Object.entries(history.byUser)) {
-    if (DUMMY_MOCK_PROFILES.includes(user)) continue;
     const cleanDays = {};
     for (const [dateKey, dayRec] of Object.entries(days || {})) {
       if (!dayRec || dayRec.isReal === false) continue;
@@ -300,7 +291,7 @@ function updateMarketStatusIndicator(isOpenFromServer) {
 // Compute Day-to-Day P&L Summary & Records for a specific trader profile (Profile-by-Profile only)
 function computeDailyPnlSummary(historyByUser, targetUser) {
   if (!targetUser || targetUser === "ALL") {
-    const availableUsers = Object.keys(historyByUser || {}).filter(u => !DUMMY_MOCK_PROFILES.includes(u));
+    const availableUsers = Object.keys(historyByUser || {});
     targetUser = currentProfile || availableUsers[0] || "";
   }
 
@@ -360,24 +351,26 @@ function computeDailyPnlSummary(historyByUser, targetUser) {
 
 // Render Day-to-Day Profit & Loss View (Strictly Profile-by-Profile)
 function renderDailyPnlView() {
-  const cleanHistory = purgeDummyFromHistory(cachedDailyHistory);
+  const cleanHistory = filterRealHistory(cachedDailyHistory);
   cachedDailyHistory = cleanHistory;
   const historyByUser = cleanHistory?.byUser || {};
 
-  // 1. Populate User Filter Dropdown (Real Profiles Only)
+  // 1. Populate User Filter Dropdown (Strictly Real Server Profiles)
   const selDailyUser = document.getElementById("selDailyUser");
   if (selDailyUser) {
     const userSet = new Set();
-    Object.keys(historyByUser).forEach(u => {
-      if (!DUMMY_MOCK_PROFILES.includes(u)) userSet.add(u);
-    });
+    // Prioritize verified profiles from server
     cachedProfiles.forEach(p => {
       const u = typeof p === "string" ? p : p.user_name;
-      if (u && !DUMMY_MOCK_PROFILES.includes(u)) userSet.add(u);
+      if (u) userSet.add(u);
     });
     cachedLeaderboard.forEach(p => {
       const u = p.user_name || p.name;
-      if (u && !DUMMY_MOCK_PROFILES.includes(u)) userSet.add(u);
+      if (u) userSet.add(u);
+    });
+    // Add any profile from history that has real activity
+    Object.keys(historyByUser).forEach(u => {
+      if (userSet.size === 0 || userSet.has(u)) userSet.add(u);
     });
 
     const userList = Array.from(userSet).sort();
@@ -482,7 +475,7 @@ function renderDailyPnlView() {
 
 // Generate & Download CSV of All Recorded Daily P&L (Strictly Profile-by-Profile, NO COMBINED ROWS)
 function exportDailyPnlToCsv() {
-  const cleanHistory = purgeDummyFromHistory(cachedDailyHistory);
+  const cleanHistory = filterRealHistory(cachedDailyHistory);
   const historyByUser = cleanHistory?.byUser || {};
   const allDates = Array.from(new Set(Object.values(historyByUser).flatMap(u => Object.keys(u)))).sort((a, b) => b.localeCompare(a));
 
@@ -497,8 +490,6 @@ function exportDailyPnlToCsv() {
 
   for (const dKey of allDates) {
     for (const [userName, userDays] of Object.entries(historyByUser)) {
-      if (DUMMY_MOCK_PROFILES.includes(userName)) continue;
-
       const dayRecord = userDays[dKey];
       if (!dayRecord || dayRecord.isReal === false) continue;
 
@@ -654,15 +645,13 @@ function setupGsheetSyncControls() {
       throw new Error("Pasted Google Sheet link instead of Web App URL ending in /exec");
     }
 
-    const cleanHistory = purgeDummyFromHistory(cachedDailyHistory);
+    const cleanHistory = filterRealHistory(cachedDailyHistory);
     const historyByUser = cleanHistory?.byUser || {};
     const allDates = Array.from(new Set(Object.values(historyByUser).flatMap(u => Object.keys(u)))).sort((a, b) => a.localeCompare(b));
 
     const rows = [];
     for (const dKey of allDates) {
       for (const [userName, userDays] of Object.entries(historyByUser)) {
-        if (DUMMY_MOCK_PROFILES.includes(userName)) continue;
-
         const dayRecord = userDays[dKey];
         if (!dayRecord || dayRecord.isReal === false) continue;
 
@@ -805,13 +794,13 @@ document.addEventListener("DOMContentLoaded", async () => {
       cachedProfiles = stored.fg_profiles_cache;
     }
     if (stored && stored.fg_daily_pnl_history) {
-      cachedDailyHistory = purgeDummyFromHistory(stored.fg_daily_pnl_history);
+      cachedDailyHistory = filterRealHistory(stored.fg_daily_pnl_history);
       chrome.storage.local.set({ fg_daily_pnl_history: cachedDailyHistory });
     }
     if (stored && stored.fg_latest_data) {
       updatePopupUi(stored.fg_latest_data);
       if (stored.fg_latest_data.daily_pnl) {
-        cachedDailyHistory = purgeDummyFromHistory(stored.fg_latest_data.daily_pnl);
+        cachedDailyHistory = filterRealHistory(stored.fg_latest_data.daily_pnl);
       }
       if (typeof stored.fg_latest_data.is_market_open === "boolean") {
         updateMarketStatusIndicator(stored.fg_latest_data.is_market_open);
@@ -890,13 +879,13 @@ document.addEventListener("DOMContentLoaded", async () => {
         currentProfile = changes.fg_selected_profile.newValue || currentProfile;
       }
       if (changes.fg_daily_pnl_history) {
-        cachedDailyHistory = purgeDummyFromHistory(changes.fg_daily_pnl_history.newValue);
+        cachedDailyHistory = filterRealHistory(changes.fg_daily_pnl_history.newValue);
         renderDailyPnlView();
       }
       if (changes.fg_latest_data) {
         updatePopupUi(changes.fg_latest_data.newValue);
         if (changes.fg_latest_data.newValue?.daily_pnl) {
-          cachedDailyHistory = purgeDummyFromHistory(changes.fg_latest_data.newValue.daily_pnl);
+          cachedDailyHistory = filterRealHistory(changes.fg_latest_data.newValue.daily_pnl);
           renderDailyPnlView();
         }
         if (typeof changes.fg_latest_data.newValue?.is_market_open === "boolean") {

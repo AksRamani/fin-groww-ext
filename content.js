@@ -908,19 +908,10 @@
   let showAfterHours = false;
   let serverMarketOpen = null;
   let cachedDailyHistory = null;
-  const DUMMY_MOCK_PROFILES = [
-    "Options-Hedger-X",
-    "BankNifty-Delta-9",
-    "Trend-Follower-55",
-    "Alpha-Scalper-01",
-    "Nifty-Momentum-Pro"
-  ];
-
-  function purgeDummyFromHistory(history) {
+  function filterRealHistory(history) {
     if (!history || !history.byUser) return { byUser: {} };
     const cleanByUser = {};
     for (const [user, days] of Object.entries(history.byUser)) {
-      if (DUMMY_MOCK_PROFILES.includes(user)) continue;
       const cleanDays = {};
       for (const [dateKey, dayRec] of Object.entries(days || {})) {
         if (!dayRec || dayRec.isReal === false) continue;
@@ -1642,19 +1633,19 @@
       }
     }
 
-    // Populate Daily P&L user filter (Strictly Real Profiles Only)
+    // Populate Daily P&L user filter (Strictly Real Server Profiles)
     if (dailyUserSel) {
       const userSet = new Set();
-      Object.keys(cachedDailyHistory?.byUser || {}).forEach(u => {
-        if (!DUMMY_MOCK_PROFILES.includes(u)) userSet.add(u);
-      });
       profilesList.forEach(p => {
         const u = typeof p === "string" ? p : p.user_name;
-        if (u && !DUMMY_MOCK_PROFILES.includes(u)) userSet.add(u);
+        if (u) userSet.add(u);
       });
       leaderboardData.forEach(p => {
         const u = p.user_name || p.name;
-        if (u && !DUMMY_MOCK_PROFILES.includes(u)) userSet.add(u);
+        if (u) userSet.add(u);
+      });
+      Object.keys(cachedDailyHistory?.byUser || {}).forEach(u => {
+        if (userSet.size === 0 || userSet.has(u)) userSet.add(u);
       });
 
       const userList = Array.from(userSet).sort();
@@ -1956,7 +1947,7 @@
   // Compute Day-to-Day P&L Summary & Records for a specific trader profile (Profile-by-Profile only)
   function computeDailyPnlSummary(historyByUser, targetUser) {
     if (!targetUser || targetUser === "ALL") {
-      const availableUsers = Object.keys(historyByUser || {}).filter(u => !DUMMY_MOCK_PROFILES.includes(u));
+      const availableUsers = Object.keys(historyByUser || {});
       targetUser = currentProfile || availableUsers[0] || "";
     }
 
@@ -2018,12 +2009,12 @@
     const wrap = shadowRoot?.getElementById("fg-drawer-daily-wrap");
     if (!wrap) return;
 
-    const cleanHistory = purgeDummyFromHistory(cachedDailyHistory);
+    const cleanHistory = filterRealHistory(cachedDailyHistory);
     cachedDailyHistory = cleanHistory;
     const historyByUser = cleanHistory?.byUser || {};
 
     if (!drawerDailyUser || drawerDailyUser === "ALL") {
-      const availableUsers = Object.keys(historyByUser).filter(u => !DUMMY_MOCK_PROFILES.includes(u));
+      const availableUsers = Object.keys(historyByUser);
       drawerDailyUser = currentProfile || availableUsers[0] || "";
     }
 
@@ -2112,7 +2103,7 @@
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === "local") {
       if (changes.fg_daily_pnl_history) {
-        cachedDailyHistory = purgeDummyFromHistory(changes.fg_daily_pnl_history.newValue);
+        cachedDailyHistory = filterRealHistory(changes.fg_daily_pnl_history.newValue);
         renderProfileSelectors();
         if (isDrawerOpen && drawerActiveTab === "daily") {
           renderDrawerDailyPnl();
@@ -2224,7 +2215,7 @@
     try {
       const stored = await chrome.storage.local.get(["fg_latest_data", "fg_selected_profile", "fg_is_minimized", "fg_pill_pos", "fg_show_after_hours", "fg_daily_pnl_history"]);
       if (stored.fg_daily_pnl_history) {
-        cachedDailyHistory = purgeDummyFromHistory(stored.fg_daily_pnl_history);
+        cachedDailyHistory = filterRealHistory(stored.fg_daily_pnl_history);
       }
       if (stored.fg_show_after_hours !== undefined) {
         showAfterHours = stored.fg_show_after_hours === true;

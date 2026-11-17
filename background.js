@@ -48,25 +48,29 @@ function getIstDateInfo(d = new Date()) {
   }
 }
 
-// Purge any dummy or mock seeded data so ONLY 100% real server data is retained
-function purgeDummyDailyHistory() {
+// Clean daily P&L history to ensure ONLY real server profiles and real sessions are kept
+function cleanDailyPnlHistory(validProfiles = []) {
   if (!dailyPnlHistory || !dailyPnlHistory.byUser) return;
   const { dateKey: todayKey } = getIstDateInfo();
-  
-  const dummyProfiles = new Set([
-    "Options-Hedger-X",
-    "BankNifty-Delta-9",
-    "Trend-Follower-55",
-    "Alpha-Scalper-01",
-    "Nifty-Momentum-Pro"
-  ]);
+  const validSet = new Set(
+    validProfiles.map(p => typeof p === "string" ? p : p.user_name).filter(Boolean)
+  );
 
   for (const user of Object.keys(dailyPnlHistory.byUser)) {
+    // If valid server profiles are provided, ensure the profile exists on server
+    if (validSet.size > 0 && !validSet.has(user)) {
+      delete dailyPnlHistory.byUser[user];
+      continue;
+    }
+
     const userDays = dailyPnlHistory.byUser[user];
     for (const dKey of Object.keys(userDays)) {
       const record = userDays[dKey];
-      // If it's a dummy profile or not marked real or a past dummy date, delete it
-      if (dummyProfiles.has(user) || dKey !== todayKey || !record.isReal) {
+      // Retain only valid sessions with actual trades or booked P&L
+      const trades = Number(record.tradesCount) || 0;
+      const pnl = Number(record.totalPnl) || 0;
+      const realized = Number(record.realizedPnl) || 0;
+      if (dKey !== todayKey || !record.isReal || (trades === 0 && pnl === 0 && realized === 0)) {
         delete userDays[dKey];
       }
     }
@@ -82,10 +86,6 @@ function purgeDummyDailyHistory() {
 // Record/update day-to-day P&L for a specific user (100% REAL server data only)
 function updateDailyPnlRecord(profileName, accountObj, statusVal, activePositionsCount = 0) {
   if (!profileName) return;
-  
-  // Guard against any dummy seed profiles
-  const dummyProfiles = new Set(["Options-Hedger-X", "BankNifty-Delta-9", "Trend-Follower-55", "Alpha-Scalper-01", "Nifty-Momentum-Pro"]);
-  if (dummyProfiles.has(profileName)) return;
 
   const acc = accountObj || {};
   const totalPnl = Number(acc.total_pnl !== undefined ? acc.total_pnl : acc.net_pnl) || 0;
@@ -131,7 +131,7 @@ chrome.storage.local.get(["fg_profile_caches", "fg_selected_profile", "fg_daily_
       dailyPnlHistory = res.fg_daily_pnl_history;
     }
   }
-  purgeDummyDailyHistory();
+  cleanDailyPnlHistory(res?.fg_profiles_cache || []);
 });
 
 // Sort positions from highest profit to highest loss
@@ -414,8 +414,6 @@ async function syncDailyPnlToGoogleSheet(options = {}) {
     const { dateKey: todayKey } = getIstDateInfo();
     const targetDate = options.targetDate || todayKey;
 
-    const dummyProfiles = new Set(["Options-Hedger-X", "BankNifty-Delta-9", "Trend-Follower-55", "Alpha-Scalper-01", "Nifty-Momentum-Pro"]);
-
     // Build rows for target date (or all dates if options.allDates is true)
     const targetDates = options.allDates
       ? Array.from(new Set(Object.values(historyByUser).flatMap(u => Object.keys(u)))).filter(d => d === todayKey).sort((a, b) => a.localeCompare(b))
@@ -425,11 +423,8 @@ async function syncDailyPnlToGoogleSheet(options = {}) {
 
     for (const dKey of targetDates) {
       for (const [userName, userDays] of Object.entries(historyByUser)) {
-        // Exclude dummy profiles
-        if (dummyProfiles.has(userName)) continue;
-
         const dayRecord = userDays[dKey];
-        if (!dayRecord) continue;
+        if (!dayRecord || !dayRecord.isReal) continue;
 
         const pnl = Number(dayRecord.totalPnl) || 0;
         const realized = Number(dayRecord.realizedPnl) || 0;

@@ -71,7 +71,7 @@ A high-frequency Chrome extension (Manifest V3) that docks a professional tradin
   - Appends rows chronologically: Date, Day, Time, Trader / Profile, Total P&L (₹), Realized P&L, Unrealized P&L, Account Equity, Trades Count, Session Status, and Trade Notes.
   - No combined summary row; strictly individual real profile rows.
   - **Smart Upsert (Zero Duplicates)**: If synced more than once on the same day, the Google Apps Script updates existing rows in place rather than creating duplicate entries.
-  - **Auto-Purge of Dummy Rows**: Webhook automatically purges any previous mock rows (`Options-Hedger-X`, dummy dates) from the sheet.
+  - **Auto-Purge of Legacy Rows**: Webhook automatically purges any previous combined summary rows from the sheet.
 - **Popup Controls**:
   - **⚙️ Config Drawer**: Easily save your Google Apps Script Webhook URL and toggle auto-sync.
   - **📤 Sync to Sheet Now**: One-click manual sync for immediate export with live progress feedback and automatic CORS/redirect fallback.

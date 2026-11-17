@@ -67,31 +67,13 @@ function doPost(e) {
 
     const rows = payload.rows || [];
 
-    // Purge any legacy dummy profiles or old mock rows from sheet
-    const dummyProfilesSet = {
-      "ALL USERS (Combined)": true,
-      "Options-Hedger-X": true,
-      "BankNifty-Delta-9": true,
-      "Trend-Follower-55": true,
-      "Alpha-Scalper-01": true,
-      "Nifty-Momentum-Pro": true
-    };
-    const mockDatesSet = {
-      "16 Nov 2026": true,
-      "14 Nov 2026": true,
-      "13 Nov 2026": true,
-      "12 Nov 2026": true,
-      "11 Nov 2026": true,
-      "10 Nov 2026": true
-    };
-
+    // Purge any legacy combined summary rows from sheet
     const initialLastRow = sheet.getLastRow();
     if (initialLastRow > 1) {
       const currentValues = sheet.getRange(2, 1, initialLastRow - 1, 4).getValues();
       for (let r = currentValues.length - 1; r >= 0; r--) {
-        const rowDate = String(currentValues[r][0]).trim();
         const rowTrader = String(currentValues[r][3]).trim();
-        if (dummyProfilesSet[rowTrader] || mockDatesSet[rowDate]) {
+        if (!rowTrader || rowTrader.includes("ALL USERS") || rowTrader.includes("Combined")) {
           sheet.deleteRow(r + 2);
         }
       }
