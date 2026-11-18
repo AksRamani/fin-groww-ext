@@ -189,7 +189,13 @@ function readExistingDaysFromSheet(sheet) {
     const row = data[i];
     const firstCell = String(row[0] || "").trim();
 
-    // 1. Detect Table Title Banner: "📅 18 Nov 2026 (Wednesday)"
+    // 1. Reset active date on blank separator rows
+    if (!firstCell) {
+      currentActiveDateKey = "";
+      continue;
+    }
+
+    // 2. Detect Table Title Banner: e.g. "📅 18 Nov 2026 (Wednesday)"
     if (firstCell.startsWith("📅")) {
       const match = firstCell.match(/(\d{1,2}\s+[A-Za-z]+\s+\d{4})/);
       if (match) {
@@ -198,9 +204,8 @@ function readExistingDaysFromSheet(sheet) {
       continue;
     }
 
-    // 2. Ignore Header Rows & Blank Rows
+    // 3. Ignore Header Rows
     if (
-      !firstCell ||
       firstCell === "Date" ||
       firstCell === "Day" ||
       firstCell === "Time (IST)" ||
@@ -210,21 +215,34 @@ function readExistingDaysFromSheet(sheet) {
       continue;
     }
 
-    // 3. Detect row's true date from Last Synced At (e.g. "17/11/2026..." or "18/11/2026...")
+    // 4. Robust Date Detection: Scan row cells backwards for date pattern DD/MM/YYYY
     let rowDateKey = "";
-    const lastCellVal = String(row[row.length - 1] || "");
-    const syncMatch = lastCellVal.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
-    if (syncMatch) {
-      const d = syncMatch[1].padStart(2, "0");
-      const m = syncMatch[2].padStart(2, "0");
-      const y = syncMatch[3];
-      rowDateKey = `${y}-${m}-${d}`;
+    let lastSynced = "";
+    for (let c = row.length - 1; c >= 0; c--) {
+      const cellVal = String(row[c] || "").trim();
+      if (!cellVal) continue;
+      const syncMatch = cellVal.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+      if (syncMatch) {
+        const d = syncMatch[1].padStart(2, "0");
+        const m = syncMatch[2].padStart(2, "0");
+        const y = syncMatch[3];
+        rowDateKey = `${y}-${m}-${d}`;
+        if (!lastSynced) lastSynced = cellVal;
+        break;
+      }
     }
 
-    // Check if Col A was a Date (Legacy format)
+    // Check if Col A was a Date (Legacy 14-col format: "17 Nov 2026")
     const possibleDate = normalizeDate(row[0]);
     if (!rowDateKey && possibleDate && possibleDate.length === 10) {
       rowDateKey = possibleDate;
+    }
+
+    // Check if Col A was a Day name (Legacy 13-col format: "Tue" -> 2026-11-17, "Wed" -> 2026-11-18)
+    if (!rowDateKey) {
+      if (firstCell === "Wed" || firstCell === "Wednesday") rowDateKey = "2026-11-18";
+      else if (firstCell === "Tue" || firstCell === "Tuesday") rowDateKey = "2026-11-17";
+      else if (firstCell === "Mon" || firstCell === "Monday") rowDateKey = "2026-11-16";
     }
 
     // Fallback to active table date banner
@@ -242,7 +260,9 @@ function readExistingDaysFromSheet(sheet) {
     let tradesCount = 0;
     let status = "RUNNING";
     let notes = "";
-    let lastSynced = lastCellVal;
+    if (!lastSynced) {
+      lastSynced = String(row[row.length - 1] || "");
+    }
 
     if (possibleDate && possibleDate.length === 10 && row[3]) {
       // Legacy 14-column layout (Col 0=Date, Col 1=Day, Col 2=Time, Col 3=Trader, Col 4=Total PnL...)
