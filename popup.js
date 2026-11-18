@@ -1334,6 +1334,7 @@ function setupGsheetSyncControls() {
         if (trades > 0 || pnl !== 0 || realized !== 0) {
           rows.push({
             date: dayRecord.displayDate || dKey,
+            dateKey: dKey,
             dayName: dayRecord.dayName || "",
             time: "15:30:00",
             trader: userName,

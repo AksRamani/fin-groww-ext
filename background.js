@@ -10,6 +10,9 @@ const LOCAL_API_BASE = "http://127.0.0.1:8787";
 let currentProfile = "Aks-new-55k";
 let isSyncing = false;
 let isTicking = false;
+let isGsheetSyncing = false;
+let isCsvExporting = false;
+let isSyncDailyPnlInProgress = false;
 let syncInterval = null;
 let tickInterval = null;
 
@@ -513,6 +516,9 @@ async function performMasterSync() {
 
 // Auto-sync to Google Sheet at market close (Mon-Fri after 3:30 PM IST)
 async function checkEndOfDayAutoSync(force = false) {
+  if (isGsheetSyncing) {
+    return;
+  }
   try {
     const stored = await chrome.storage.local.get([
       "fg_gsheet_url",
@@ -539,17 +545,20 @@ async function checkEndOfDayAutoSync(force = false) {
 
     // Trigger after 3:30 PM IST (930 minutes) on a weekday
     if (force || (isWeekday && totalMins >= 930)) {
+      isGsheetSyncing = true;
+      // Pre-emptively record date so concurrent alarm or poll ticks do not duplicate
+      await chrome.storage.local.set({ fg_gsheet_eod_synced_date: dateKey });
+
       console.log(`[FinGroww Background] Triggering 3:30 PM Market Close Google Sheet auto-sync for ${dateKey}...`);
-      if (!isSyncing) {
-        await performMasterSync();
-      }
       const res = await syncDailyPnlToGoogleSheet({ targetDate: dateKey, isEndOfDay: true });
-      if (res && res.success) {
-        await chrome.storage.local.set({ fg_gsheet_eod_synced_date: dateKey });
+      if (!res || !res.success) {
+        console.warn("[FinGroww Background] Market close Google Sheet auto-sync warning:", res?.error);
       }
     }
   } catch (e) {
     console.warn("[FinGroww Background] End-of-day auto sync check error:", e);
+  } finally {
+    isGsheetSyncing = false;
   }
 }
 
@@ -784,6 +793,9 @@ async function exportProfileTradesCsv(options = {}) {
 
 // Auto-download trade details CSV for the selected profile at Indian market close (3:30 PM IST)
 async function checkEndOfDayAutoCsvDownload(force = false) {
+  if (isCsvExporting) {
+    return;
+  }
   try {
     const stored = await chrome.storage.local.get([
       "fg_auto_download_csv_eod",
@@ -811,6 +823,10 @@ async function checkEndOfDayAutoCsvDownload(force = false) {
 
     // Trigger after 3:30 PM IST (930 minutes) on a weekday
     if (force || (isWeekday && totalMins >= 930)) {
+      isCsvExporting = true;
+      // Pre-emptively record date to prevent concurrent triggers
+      await chrome.storage.local.set({ fg_eod_trades_csv_downloaded_date: dateKey });
+
       const targetProfile = currentProfile || stored.fg_selected_profile;
       console.log(`[FinGroww Background] Market closed! Triggering 3:30 PM Trade Details CSV Auto-Download for "${targetProfile}" on ${dateKey}...`);
 
@@ -823,11 +839,18 @@ async function checkEndOfDayAutoCsvDownload(force = false) {
     }
   } catch (e) {
     console.warn("[FinGroww Background] End-of-day auto CSV download check error:", e);
+  } finally {
+    isCsvExporting = false;
   }
 }
 
 // Sync Daily P&L records to Google Sheets Webhook (Profile-by-Profile, ONLY REAL DATA)
 async function syncDailyPnlToGoogleSheet(options = {}) {
+  if (isSyncDailyPnlInProgress) {
+    console.log("[FinGroww Background] syncDailyPnlToGoogleSheet already in progress, skipping duplicate call.");
+    return { success: false, error: "Sync already in progress" };
+  }
+  isSyncDailyPnlInProgress = true;
   try {
     const stored = await chrome.storage.local.get([
       "fg_gsheet_url",
@@ -880,6 +903,7 @@ async function syncDailyPnlToGoogleSheet(options = {}) {
         if (trades > 0 || pnl !== 0 || realized !== 0) {
           rows.push({
             date: dayRecord.displayDate || dKey,
+            dateKey: dKey,
             dayName: dayRecord.dayName || "",
             time: "15:30:00",
             trader: userName,
@@ -962,6 +986,8 @@ async function syncDailyPnlToGoogleSheet(options = {}) {
       fg_gsheet_last_sync_msg: errText
     });
     return { success: false, error: errText };
+  } finally {
+    isSyncDailyPnlInProgress = false;
   }
 }
 

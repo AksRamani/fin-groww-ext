@@ -18,16 +18,23 @@ This guide explains how to connect your **Google Sheet** to the FinGroww Trading
 
 ---
 
-### Step 3: Deploy as a Web App
-1. Click the blue **Deploy** button at the top-right > **New deployment** (or **Manage deployments** > **Edit** > **New version** if updating an existing deployment).
-2. Click the gear icon next to "Select type" and choose **Web app**.
-3. Fill in the fields:
+### Step 3: Deploy or Update as a Web App
+1. **If deploying for the first time**:
+   - Click the blue **Deploy** button at the top-right > **New deployment**.
+   - Select type: **Web app**.
    - **Description**: `FinGroww Daily PnL Sync with Charges & Taxes`
    - **Execute as**: `Me (your email)`
    - **Who has access**: `Anyone` *(Required so the extension can send data without asking for Google login credentials)*
-4. Click **Deploy**.
-5. Click **Authorize access**, choose your Google account, and click **Allow**.
-6. Copy the generated **Web App URL** (it ends with `/exec`).
+   - Click **Deploy**, click **Authorize access**, and copy the **Web App URL** (ends with `/exec`).
+2. **If updating an existing deployment**:
+   - Click **Deploy > Manage deployments**.
+   - Click the **pencil icon (Edit)**.
+   - Under **Version**, select **New version**.
+   - Click **Deploy**.
+3. **Clean Duplicates & Reformat Existing Data (1-Click)**:
+   - Reload your Google Sheet in the browser tab.
+   - You will see a new menu in the top toolbar: **FinGroww** > **🧹 Clean Duplicates & Reformat All**.
+   - Click it once! It will instantly delete all duplicate entries, fix all cell formulas (`=E{row}-F{row}`), format all currencies with `₹`, and restore crisp alternating rows.
 
 ---
 
@@ -45,14 +52,18 @@ This guide explains how to connect your **Google Sheet** to the FinGroww Trading
   - Automatically appends today's real trading ledger to the sheet named `Daily PnL Ledger`.
   - Strictly **Profile-by-Profile** (no aggregated combined row).
   - Only records profiles that made trades or booked profit/loss today (100% real server data).
+  - **Zero Duplicates Guarantee**:
+    - Concurrency lock (`LockService`) prevents race conditions between multiple sync ticks.
+    - Canonical date & trader normalization matches existing rows regardless of date formatting.
+    - If a day's row already exists, it updates that exact row in place.
   - **14 Ledger Columns**:
     1. **Date** (e.g. `18 Nov 2026`)
-    2. **Day** (e.g. `Wednesday`)
+    2. **Day** (e.g. `Wed`)
     3. **Time (IST)** (e.g. `15:30:00`)
     4. **Trader / Profile** (e.g. `PARTH 18-Nov`)
     5. **Total P&L (₹)** (Gross / Net P&L before charges)
     6. **Brokrage (₹)** (Real broker charges & taxes fetched directly per profile from the website card)
-    7. **Total Profit (₹)** (Dynamic formula: `=E{row}-F{row}`)
+    7. **Total Profit (₹)** (Self-contained dynamic formula: `=E{row}-F{row}`)
     8. **Realized P&L (₹)**
     9. **Unrealized P&L (₹)**
     10. **Account Equity (₹)**
@@ -60,7 +71,10 @@ This guide explains how to connect your **Google Sheet** to the FinGroww Trading
     12. **Session Status**
     13. **Win Rate / Notes**
     14. **Last Synced At**
+  - **Professional Formatting**:
+    - All monetary figures formatted with Indian Rupee symbol `₹`, standard commas, and negative values enclosed in `(₹...)` or red highlight.
+    - Alternating clean row backgrounds (`#ffffff` and `#f8fafc`).
+    - Session statuses highlighted (Green for `RUNNING`, Red for `STOPPED`, Gray for `PAUSED`).
   - **Live Auto-Calculation while Editing the Sheet**:
     Whenever you manually change **Total P&L** (Column E) or **Brokrage** (Column F) inside Google Sheets, **Total Profit** (Column G) updates immediately via formula and script trigger `onEdit(e)`.
-  - **Zero Duplicates**: If synced more than once on the same date, it updates that day's existing rows instead of creating duplicates.
-  - **Auto-Migration**: If you already have an existing sheet with 12 columns, the script automatically inserts the two new columns and calculates formulas without losing past data.
+  - **Auto-Migration**: If you already have an existing sheet with older 12 columns, the script automatically inserts the two new columns and calculates formulas without losing past data.
