@@ -95,8 +95,20 @@ function updateDailyPnlRecord(profileName, accountObj, statusVal, activePosition
 
   const acc = accountObj || {};
   const totalPnl = Number(acc.total_pnl !== undefined ? acc.total_pnl : (acc.net_pnl !== undefined ? acc.net_pnl : existingRecord.totalPnl)) || 0;
-  const realizedPnl = Number(acc.realized_pnl !== undefined ? acc.realized_pnl : existingRecord.realizedPnl) || 0;
-  const unrealizedPnl = Number(acc.unrealized_pnl !== undefined ? acc.unrealized_pnl : existingRecord.unrealizedPnl) || 0;
+  
+  let realizedPnl = Number(acc.realized_pnl !== undefined ? acc.realized_pnl : existingRecord.realizedPnl) || 0;
+  let unrealizedPnl = Number(acc.unrealized_pnl !== undefined ? acc.unrealized_pnl : existingRecord.unrealizedPnl) || 0;
+
+  // Realized vs Unrealized P&L reconciliation
+  if (activePositionsCount === 0 || unrealizedPnl === 0) {
+    if (realizedPnl === 0 && totalPnl !== 0) {
+      realizedPnl = totalPnl;
+    }
+    unrealizedPnl = 0;
+  } else if (realizedPnl === 0 && unrealizedPnl !== 0 && totalPnl !== 0) {
+    realizedPnl = totalPnl - unrealizedPnl;
+  }
+
   const equity = Number(acc.account_equity || acc.equity || existingRecord.equity) || 100000;
   const charges = Number(acc.total_charges !== undefined ? acc.total_charges : (acc.charges !== undefined ? acc.charges : (existingRecord.charges || 0))) || 0;
   const slippage = Number(acc.total_slippage !== undefined ? acc.total_slippage : (existingRecord.slippage || 0)) || 0;
@@ -289,14 +301,27 @@ async function syncAllProfilesSessionStates(profileNames = []) {
           const acc = res.account;
           const trades = Number(acc.total_trades || (res.stats && res.stats.total_trades) || 0);
           const pnl = Number(acc.total_pnl !== undefined ? acc.total_pnl : acc.net_pnl) || 0;
-          const realized = Number(acc.realized_pnl) || 0;
+          const openPositions = res.active_positions || [];
+
+          let realized = Number(acc.realized_pnl !== undefined ? acc.realized_pnl : 0);
+          let unrealized = Number(acc.unrealized_pnl !== undefined ? acc.unrealized_pnl : 0);
+
+          if (openPositions.length === 0 || unrealized === 0) {
+            if (realized === 0 && pnl !== 0) realized = pnl;
+            unrealized = 0;
+          } else if (realized === 0 && unrealized !== 0 && pnl !== 0) {
+            realized = pnl - unrealized;
+          }
+
+          acc.realized_pnl = realized;
+          acc.unrealized_pnl = unrealized;
 
           if (trades > 0 || pnl !== 0 || realized !== 0) {
             updateDailyPnlRecord(
               u,
               acc,
               res.engine_status || res.status || "RUNNING",
-              res.active_positions ? res.active_positions.length : 0,
+              openPositions.length,
               res.stats || {}
             );
           }
@@ -946,22 +971,47 @@ async function syncDailyPnlToGoogleSheet(options = {}) {
         const dayRecord = userDays[dKey];
         if (!dayRecord || !dayRecord.isReal) continue;
 
-        const pnl = Number(dayRecord.totalPnl) || 0;
+        const pnl = Number(dayRecord.totalPnl !== undefined ? dayRecord.totalPnl : profAccount.total_pnl) || 0;
         const profAccount = profileCaches[userName]?.account || {};
+        const openPos = Number(dayRecord.openPositionsCount !== undefined ? dayRecord.openPositionsCount : (profileCaches[userName]?.positions?.length || 0));
+
         const charges = Number(
           dayRecord.charges !== undefined && dayRecord.charges > 0
             ? dayRecord.charges
             : (profAccount.total_charges !== undefined ? profAccount.total_charges : (profAccount.charges || 0))
         ) || 0;
         const netAfterCharges = pnl - charges;
-        const realized = Number(dayRecord.realizedPnl) || 0;
-        const unrealized = Number(dayRecord.unrealizedPnl) || 0;
-        const eq = Number(dayRecord.equity) || 100000;
-        const trades = Number(dayRecord.tradesCount) || 0;
+
+        let realized = 0;
+        let unrealized = 0;
+
+        if (profAccount.realized_pnl !== undefined && profAccount.realized_pnl !== null) {
+          realized = Number(profAccount.realized_pnl);
+        } else if (dayRecord.realizedPnl !== undefined && dayRecord.realizedPnl !== 0) {
+          realized = Number(dayRecord.realizedPnl);
+        }
+
+        if (profAccount.unrealized_pnl !== undefined && profAccount.unrealized_pnl !== null) {
+          unrealized = Number(profAccount.unrealized_pnl);
+        } else if (dayRecord.unrealizedPnl !== undefined && dayRecord.unrealizedPnl !== 0) {
+          unrealized = Number(dayRecord.unrealizedPnl);
+        }
+
+        // Exact reconciliation: Total P&L = Realized P&L + Unrealized P&L
+        if (openPos === 0 || unrealized === 0) {
+          if (realized === 0 && pnl !== 0) {
+            realized = pnl;
+          }
+          unrealized = 0;
+        } else if (realized === 0 && unrealized !== 0 && pnl !== 0) {
+          realized = pnl - unrealized;
+        }
+
+        const eq = Number(profAccount.account_equity || dayRecord.equity || 100000);
+        const trades = Number(dayRecord.tradesCount || profAccount.total_trades || 0);
         const wins = Number(dayRecord.winningTrades) || 0;
         const losses = Number(dayRecord.losingTrades) || 0;
         const winRateVal = Number(dayRecord.winRate) || 0;
-        const openPos = Number(dayRecord.openPositionsCount) || 0;
 
         let notesText = `${trades} trades executed`;
         if (wins > 0 || losses > 0) {

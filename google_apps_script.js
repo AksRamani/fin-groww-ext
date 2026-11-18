@@ -358,6 +358,16 @@ function cleanDuplicatesAndFixSheet(targetSheet) {
       const charges = Number(sheet.getRange(r, 6).getValue()) || 0;
       const status = String(sheet.getRange(r, 12).getValue());
       sheet.getRange(r, 7).setFormula(`=E${r}-F${r}`);
+
+      // Auto-reconcile Realized P&L if missing: Realized = Total P&L - Unrealized P&L
+      const realCell = sheet.getRange(r, 8);
+      const unrealCell = sheet.getRange(r, 9);
+      const realVal = Number(realCell.getValue()) || 0;
+      const unrealVal = Number(unrealCell.getValue()) || 0;
+      if (realVal === 0 && pnl !== 0) {
+        realCell.setValue(pnl - unrealVal);
+      }
+
       formatRow(sheet, r, false, pnl, charges, status);
     }
   }
@@ -368,7 +378,7 @@ function cleanDuplicatesAndFixSheet(targetSheet) {
 }
 
 /**
- * Utility to recalculate and fix all formula references in Column G
+ * Utility to recalculate and fix all formula references and P&L reconciliation
  */
 function recalculateAllFormulas() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -383,6 +393,15 @@ function recalculateAllFormulas() {
     const charges = Number(sheet.getRange(r, 6).getValue()) || 0;
     const status = String(sheet.getRange(r, 12).getValue());
     sheet.getRange(r, 7).setFormula(`=E${r}-F${r}`);
+
+    const realCell = sheet.getRange(r, 8);
+    const unrealCell = sheet.getRange(r, 9);
+    const realVal = Number(realCell.getValue()) || 0;
+    const unrealVal = Number(unrealCell.getValue()) || 0;
+    if (realVal === 0 && pnl !== 0) {
+      realCell.setValue(pnl - unrealVal);
+    }
+
     formatRow(sheet, r, false, pnl, charges, status);
   }
   applyHeaderFormatting(sheet);
@@ -508,11 +527,19 @@ function formatRow(sheet, rowNum, isCombined, pnl, charges, status) {
     netCell.setFontColor(netVal > 0 ? "#15803d" : netVal < 0 ? "#b91c1c" : "#475569");
     netCell.setNumberFormat("₹#,##0.00;[Red](₹#,##0.00);₹0.00");
 
-    // Col 8: Realized P&L (₹) - Right
-    sheet.getRange(rowNum, 8).setHorizontalAlignment("right").setNumberFormat("₹#,##0.00;[Red](₹#,##0.00);₹0.00");
+    // Col 8: Realized P&L (₹) - Right, Bold Green/Red
+    const realCell = sheet.getRange(rowNum, 8);
+    realCell.setHorizontalAlignment("right").setFontWeight("600");
+    const realVal = Number(realCell.getValue()) || 0;
+    realCell.setFontColor(realVal > 0 ? "#15803d" : realVal < 0 ? "#b91c1c" : "#475569");
+    realCell.setNumberFormat("₹#,##0.00;[Red](₹#,##0.00);₹0.00");
 
-    // Col 9: Unrealized P&L (₹) - Right
-    sheet.getRange(rowNum, 9).setHorizontalAlignment("right").setNumberFormat("₹#,##0.00;[Red](₹#,##0.00);₹0.00");
+    // Col 9: Unrealized P&L (₹) - Right, Bold Green/Red
+    const unrealCell = sheet.getRange(rowNum, 9);
+    unrealCell.setHorizontalAlignment("right").setFontWeight("600");
+    const unrealVal = Number(unrealCell.getValue()) || 0;
+    unrealCell.setFontColor(unrealVal > 0 ? "#15803d" : unrealVal < 0 ? "#b91c1c" : "#475569");
+    unrealCell.setNumberFormat("₹#,##0.00;[Red](₹#,##0.00);₹0.00");
 
     // Col 10: Account Equity (₹) - Right
     sheet.getRange(rowNum, 10).setHorizontalAlignment("right").setNumberFormat("₹#,##0.00;₹0.00");

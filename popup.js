@@ -1305,10 +1305,10 @@ function setupGsheetSyncControls() {
       new Set(Object.values(historyByUser).flatMap((u) => Object.keys(u))),
     ).sort((a, b) => a.localeCompare(b));
 
-    // Fetch live session states and real broker charges for all profiles
+    // Fetch live session states and real broker charges & P&L for all profiles
     const hosts = ["https://fingroww-trading.onrender.com", "http://127.0.0.1:8787"];
     const activeUsers = Object.keys(historyByUser).filter((u) => !u.includes("ALL USERS"));
-    const profileChargesMap = {};
+    const profileSessionMap = {};
 
     await Promise.all(
       activeUsers.map(async (u) => {
@@ -1317,13 +1317,8 @@ function setupGsheetSyncControls() {
             const res = await fetch(`${h}/api/paper/session/state?user=${encodeURIComponent(u)}`);
             if (res.ok) {
               const data = await res.json();
-              const chg = Number(
-                data?.account?.total_charges !== undefined
-                  ? data.account.total_charges
-                  : (data?.account?.charges || 0),
-              );
-              if (chg > 0) {
-                profileChargesMap[u] = chg;
+              if (data && data.account) {
+                profileSessionMap[u] = data;
               }
               break;
             }
@@ -1338,27 +1333,56 @@ function setupGsheetSyncControls() {
         const dayRecord = userDays[dKey];
         if (!dayRecord || dayRecord.isReal === false) continue;
 
-        const pnl = Number(dayRecord.totalPnl) || 0;
+        const profData = profileSessionMap[userName] || {};
+        const profAccount = profData.account || {};
+        const openPos = Number(
+          profData.active_positions
+            ? profData.active_positions.length
+            : (dayRecord.openPositionsCount || 0),
+        );
+
+        const pnl = Number(dayRecord.totalPnl !== undefined ? dayRecord.totalPnl : (profAccount.total_pnl || 0)) || 0;
         const charges = Number(
-          dayRecord.charges !== undefined && dayRecord.charges > 0
-            ? dayRecord.charges
-            : (profileChargesMap[userName] !== undefined
-                ? profileChargesMap[userName]
-                : (cachedAccount?.user_name === userName
-                    ? (cachedAccount?.total_charges || 0)
-                    : 0)),
+          profAccount.total_charges !== undefined
+            ? profAccount.total_charges
+            : (dayRecord.charges !== undefined && dayRecord.charges > 0
+                ? dayRecord.charges
+                : (cachedAccount?.user_name === userName ? (cachedAccount?.total_charges || 0) : 0)),
         ) || 0;
         const netAfterCharges = pnl - charges;
-        const realized = Number(dayRecord.realizedPnl) || 0;
-        const unrealized = Number(dayRecord.unrealizedPnl) || 0;
-        const eq = Number(dayRecord.equity) || 100000;
-        const trades = Number(dayRecord.tradesCount) || 0;
+
+        let realized = 0;
+        let unrealized = 0;
+
+        if (profAccount.realized_pnl !== undefined && profAccount.realized_pnl !== null) {
+          realized = Number(profAccount.realized_pnl);
+        } else if (dayRecord.realizedPnl !== undefined && dayRecord.realizedPnl !== 0) {
+          realized = Number(dayRecord.realizedPnl);
+        }
+
+        if (profAccount.unrealized_pnl !== undefined && profAccount.unrealized_pnl !== null) {
+          unrealized = Number(profAccount.unrealized_pnl);
+        } else if (dayRecord.unrealizedPnl !== undefined && dayRecord.unrealizedPnl !== 0) {
+          unrealized = Number(dayRecord.unrealizedPnl);
+        }
+
+        // Exact accounting reconciliation: Total P&L = Realized P&L + Unrealized P&L
+        if (openPos === 0 || unrealized === 0) {
+          if (realized === 0 && pnl !== 0) {
+            realized = pnl;
+          }
+          unrealized = 0;
+        } else if (realized === 0 && unrealized !== 0 && pnl !== 0) {
+          realized = pnl - unrealized;
+        }
+
+        const eq = Number(profAccount.account_equity || dayRecord.equity || 100000);
+        const trades = Number(dayRecord.tradesCount || profAccount.total_trades || 0);
         const wins = Number(dayRecord.winningTrades) || 0;
         const losses = Number(dayRecord.losingTrades) || 0;
         const wr =
           Number(dayRecord.winRate) ||
           (wins + losses > 0 ? (wins / (wins + losses)) * 100 : 0);
-        const openPos = Number(dayRecord.openPositionsCount) || 0;
 
         let notesText = `${trades} trades executed`;
         if (wins > 0 || losses > 0) {
