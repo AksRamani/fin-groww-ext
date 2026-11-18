@@ -593,8 +593,8 @@ function applyTableColumnWidths(sheet) {
 }
 
 /**
- * Menu action: Clears any corrupted or shifted rows and sets up ONLY today's
- * real 18 Nov 2026 trading session with live metrics directly from the FinGroww server.
+ * Menu action: Clears any corrupted or shifted rows and dynamically populates
+ * the current day's active profiles directly from the live FinGroww server API.
  */
 function resetSheetTodayOnly() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -603,124 +603,14 @@ function resetSheetTodayOnly() {
     sheet = ss.insertSheet("Daily PnL Ledger");
   }
 
-  const todayKey = "2026-11-18";
+  const todayKey = Utilities.formatDate(new Date(), "Asia/Kolkata", "yyyy-MM-dd");
   const nowIst = new Date().toLocaleString("en-IN", {
     timeZone: "Asia/Kolkata",
   });
 
-  // Direct verified server metrics for 18 Nov 2026 active profiles
-  const todayRecords = {
-    "14k traders": {
-      trader: "14K Traders",
-      totalPnl: -10090.28,
-      charges: 15212.73,
-      realized: -10090.28,
-      unrealized: 0,
-      equity: 89909.72,
-      tradesCount: 244,
-      status: "RUNNING",
-      notes: "244 trades (165W / 79L - 67.6% WR)",
-      lastSynced: nowIst,
-    },
-    "aks-intraday": {
-      trader: "AKS-IntraDay",
-      totalPnl: -17528.01,
-      charges: 9191.39,
-      realized: -17528.01,
-      unrealized: 0,
-      equity: 82471.99,
-      tradesCount: 158,
-      status: "RUNNING",
-      notes: "158 trades (82W / 76L - 51.9% WR)",
-      lastSynced: nowIst,
-    },
-    "ak 9 nov": {
-      trader: "Ak 9 nov",
-      totalPnl: 797.97,
-      charges: 2227.88,
-      realized: 4284.51,
-      unrealized: -3486.54,
-      equity: 100797.97,
-      tradesCount: 27,
-      status: "RUNNING",
-      notes: "27 trades (19W / 8L - 70.4% WR) • 9 Open",
-      lastSynced: nowIst,
-    },
-    "aks-new-55k": {
-      trader: "Aks-new-55k",
-      totalPnl: -13001.52,
-      charges: 14467.0,
-      realized: -9154.41,
-      unrealized: -3847.11,
-      equity: 86998.48,
-      tradesCount: 241,
-      status: "RUNNING",
-      notes: "241 trades (186W / 55L - 77.2% WR) • 7 Open",
-      lastSynced: nowIst,
-    },
-    "akshay 18 nov": {
-      trader: "Akshay 18 nov",
-      totalPnl: -4860.29,
-      charges: 2322.16,
-      realized: -3043.11,
-      unrealized: -1817.18,
-      equity: 95139.71,
-      tradesCount: 28,
-      status: "RUNNING",
-      notes: "28 trades (18W / 10L - 64.3% WR) • 5 Open",
-      lastSynced: nowIst,
-    },
-    "akshay intraday": {
-      trader: "Akshay intraday",
-      totalPnl: 5932.94,
-      charges: 9320.9,
-      realized: 9055.6,
-      unrealized: -3122.66,
-      equity: 105932.94,
-      tradesCount: 136,
-      status: "RUNNING",
-      notes: "136 trades (91W / 45L - 66.9% WR) • 7 Open",
-      lastSynced: nowIst,
-    },
-    "parth 18-nov": {
-      trader: "PARTH 18-Nov",
-      totalPnl: 11241.79,
-      charges: 4737.67,
-      realized: 11360.04,
-      unrealized: -118.25,
-      equity: 111241.79,
-      tradesCount: 88,
-      status: "STOPPED_NEW_TRADES",
-      notes: "88 trades (69W / 19L - 78.4% WR) • 8 Open",
-      lastSynced: nowIst,
-    },
-    "parth gohel": {
-      trader: "Parth Gohel",
-      totalPnl: 1429.94,
-      charges: 5685.94,
-      realized: 959.8,
-      unrealized: 470.14,
-      equity: 101429.94,
-      tradesCount: 85,
-      status: "PAUSED",
-      notes: "85 trades (48W / 37L - 56.5% WR) • 1 Open",
-      lastSynced: nowIst,
-    },
-    "tirth patel": {
-      trader: "Tirth Patel",
-      totalPnl: -3758.49,
-      charges: 1283.65,
-      realized: -2221.79,
-      unrealized: -1536.7,
-      equity: 96241.51,
-      tradesCount: 16,
-      status: "RUNNING",
-      notes: "16 trades (7W / 9L - 43.8% WR) • 3 Open",
-      lastSynced: nowIst,
-    },
-  };
+  const todayRecords = {};
 
-  // Attempt live update from server API
+  // Fetch live profiles and session states dynamically from FinGroww server
   try {
     const profRes = UrlFetchApp.fetch(
       "https://fingroww-trading.onrender.com/api/paper/profiles",
@@ -776,7 +666,13 @@ function resetSheetTodayOnly() {
       });
     }
   } catch (err) {
-    console.warn("Live fetch error, used fallback:", err);
+    console.error("Live fetch error:", err);
+  }
+
+  if (Object.keys(todayRecords).length === 0) {
+    sheet.clear();
+    SpreadsheetApp.getUi().alert("Sheet cleared. Please click 'Sync to Sheet Now' in the FinGroww extension popup to populate today's data.");
+    return;
   }
 
   const daysMap = {
