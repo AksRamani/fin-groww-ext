@@ -262,6 +262,58 @@ function isIndianMarketOpenNow() {
   }
 }
 
+// Multi-profile session state synchronization
+let lastMultiProfileSyncTime = 0;
+
+async function syncAllProfilesSessionStates(profileNames = []) {
+  if (!Array.isArray(profileNames) || profileNames.length === 0) return;
+
+  const validNames = profileNames.filter(u => u && typeof u === "string" && !u.includes("ALL USERS"));
+  if (validNames.length === 0) return;
+
+  console.log(`[FinGroww Background] Fetching real session states & charges for ${validNames.length} profiles...`);
+
+  await Promise.all(
+    validNames.map(async (u) => {
+      try {
+        const res = await apiFetch(`/api/paper/session/state?user=${encodeURIComponent(u)}`, {}, 12000);
+        if (res && res.account) {
+          profileCaches[u] = {
+            ...(profileCaches[u] || {}),
+            account: res.account,
+            status: res.engine_status || res.status || "RUNNING",
+            positions: res.active_positions || [],
+            timestamp: Date.now()
+          };
+
+          const acc = res.account;
+          const trades = Number(acc.total_trades || (res.stats && res.stats.total_trades) || 0);
+          const pnl = Number(acc.total_pnl !== undefined ? acc.total_pnl : acc.net_pnl) || 0;
+          const realized = Number(acc.realized_pnl) || 0;
+
+          if (trades > 0 || pnl !== 0 || realized !== 0) {
+            updateDailyPnlRecord(
+              u,
+              acc,
+              res.engine_status || res.status || "RUNNING",
+              res.active_positions ? res.active_positions.length : 0,
+              res.stats || {}
+            );
+          }
+        }
+      } catch (err) {
+        console.warn(`[FinGroww Background] Failed to fetch session state for ${u}:`, err);
+      }
+    })
+  );
+
+  lastMultiProfileSyncTime = Date.now();
+  await chrome.storage.local.set({
+    fg_profile_caches: profileCaches,
+    fg_daily_pnl_history: dailyPnlHistory
+  });
+}
+
 // Master Fast Sync Routine: polls state, running leaderboard, and profiles list
 async function performMasterSync() {
   if (isSyncing) return;
@@ -472,6 +524,12 @@ async function performMasterSync() {
         );
       }
     });
+
+    // Periodically refresh full session states and broker charges for all real active profiles
+    if (Date.now() - lastMultiProfileSyncTime > 45000) {
+      const allActiveProfiles = Array.from(profileMap.keys()).filter(u => !u.includes("ALL USERS"));
+      syncAllProfilesSessionStates(allActiveProfiles).catch(() => {});
+    }
 
     // 3. Save to chrome.storage.local -> triggers chrome.storage.onChanged on EVERY OPEN TAB
     const syncPayload = {
@@ -875,6 +933,12 @@ async function syncDailyPnlToGoogleSheet(options = {}) {
       ? Array.from(new Set(Object.values(historyByUser).flatMap(u => Object.keys(u)))).filter(d => d === todayKey).sort((a, b) => a.localeCompare(b))
       : [targetDate];
 
+    // Refresh live session states & broker charges for ALL active profiles before syncing
+    const profilesToFetch = Object.keys(historyByUser).filter(u => !u.includes("ALL USERS"));
+    if (profilesToFetch.length > 0) {
+      await syncAllProfilesSessionStates(profilesToFetch);
+    }
+
     const rows = [];
 
     for (const dKey of targetDates) {
@@ -883,7 +947,12 @@ async function syncDailyPnlToGoogleSheet(options = {}) {
         if (!dayRecord || !dayRecord.isReal) continue;
 
         const pnl = Number(dayRecord.totalPnl) || 0;
-        const charges = Number(dayRecord.charges !== undefined ? dayRecord.charges : (profileCaches[userName]?.account?.total_charges || 0)) || 0;
+        const profAccount = profileCaches[userName]?.account || {};
+        const charges = Number(
+          dayRecord.charges !== undefined && dayRecord.charges > 0
+            ? dayRecord.charges
+            : (profAccount.total_charges !== undefined ? profAccount.total_charges : (profAccount.charges || 0))
+        ) || 0;
         const netAfterCharges = pnl - charges;
         const realized = Number(dayRecord.realizedPnl) || 0;
         const unrealized = Number(dayRecord.unrealizedPnl) || 0;

@@ -1305,6 +1305,33 @@ function setupGsheetSyncControls() {
       new Set(Object.values(historyByUser).flatMap((u) => Object.keys(u))),
     ).sort((a, b) => a.localeCompare(b));
 
+    // Fetch live session states and real broker charges for all profiles
+    const hosts = ["https://fingroww-trading.onrender.com", "http://127.0.0.1:8787"];
+    const activeUsers = Object.keys(historyByUser).filter((u) => !u.includes("ALL USERS"));
+    const profileChargesMap = {};
+
+    await Promise.all(
+      activeUsers.map(async (u) => {
+        for (const h of hosts) {
+          try {
+            const res = await fetch(`${h}/api/paper/session/state?user=${encodeURIComponent(u)}`);
+            if (res.ok) {
+              const data = await res.json();
+              const chg = Number(
+                data?.account?.total_charges !== undefined
+                  ? data.account.total_charges
+                  : (data?.account?.charges || 0),
+              );
+              if (chg > 0) {
+                profileChargesMap[u] = chg;
+              }
+              break;
+            }
+          } catch (e) {}
+        }
+      }),
+    );
+
     const rows = [];
     for (const dKey of allDates) {
       for (const [userName, userDays] of Object.entries(historyByUser)) {
@@ -1312,7 +1339,15 @@ function setupGsheetSyncControls() {
         if (!dayRecord || dayRecord.isReal === false) continue;
 
         const pnl = Number(dayRecord.totalPnl) || 0;
-        const charges = Number(dayRecord.charges !== undefined ? dayRecord.charges : (cachedAccount?.total_charges || 0)) || 0;
+        const charges = Number(
+          dayRecord.charges !== undefined && dayRecord.charges > 0
+            ? dayRecord.charges
+            : (profileChargesMap[userName] !== undefined
+                ? profileChargesMap[userName]
+                : (cachedAccount?.user_name === userName
+                    ? (cachedAccount?.total_charges || 0)
+                    : 0)),
+        ) || 0;
         const netAfterCharges = pnl - charges;
         const realized = Number(dayRecord.realizedPnl) || 0;
         const unrealized = Number(dayRecord.unrealizedPnl) || 0;
