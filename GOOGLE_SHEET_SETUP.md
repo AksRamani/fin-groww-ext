@@ -54,23 +54,20 @@ This guide explains how to connect your **Google Sheet** to the FinGroww Trading
   - **No Redundant Columns**: "Date", "Day", and "Time (IST)" are removed from profile rows so the table begins directly with **Trader / Profile**.
   - **Blank Row Divider**: A clean blank row separates each day's table.
   - **Zero Duplicates Guarantee**: Concurrency lock (`LockService`) prevents race conditions between multiple sync ticks. Existing days are updated in place.
-  - **11 Table Columns**:
+  - **10 Table Columns (Pure Backend Metrics Matching the Website)**:
     1. **Trader / Profile** (Col A, e.g. `PARTH 18-Nov`)
-    2. **Total P&L (₹)** (Col B)
-    3. **Brokrage (₹)** (Col C, real broker charges from server)
-    4. **Total Profit (₹)** (Col D, dynamic formula: `=B{row}-C{row}`)
-    5. **Realized P&L (₹)** (Col E, real server realized P&L, bold green/red)
-    6. **Unrealized P&L (₹)** (Col F, real server mark-to-market unrealized P&L, bold green/red)
-    7. **Account Equity (₹)** (Col G)
-    8. **Trades Count** (Col H)
-    9. **Session Status** (Col I)
-    10. **Win Rate / Notes** (Col J)
-    11. **Last Synced At** (Col K)
+    2. **Net Total P&L (₹)** (Col B, direct backend net P&L)
+    3. **Charges & Taxes (₹)** (Col C, direct backend broker charges & taxes)
+    4. **Realized P&L (₹)** (Col D, direct backend realized P&L, bold green/red)
+    5. **Unrealized P&L (₹)** (Col E, direct backend mark-to-market unrealized P&L, bold green/red)
+    6. **Account Equity (₹)** (Col F, direct backend equity)
+    7. **Trades Count** (Col G)
+    8. **Session Status** (Col H)
+    9. **Win Rate / Notes** (Col I)
+    10. **Last Synced At** (Col J)
   - **Professional Formatting**:
     - All monetary figures formatted with Indian Rupee symbol `₹`, standard commas, and negative values enclosed in `(₹...)` or red highlight.
     - Alternating clean row backgrounds (`#ffffff` and `#f8fafc`).
     - Session statuses highlighted (Green for `RUNNING`, Red for `STOPPED`, Gray for `PAUSED`).
-  - **Live Auto-Calculation while Editing the Sheet**:
-    Whenever you manually change **Total P&L** (Column B) or **Brokrage** (Column C) inside Google Sheets, **Total Profit** (Column D) updates immediately via formula `=B{row}-C{row}` and script trigger `onEdit(e)`.
   - **1-Click Table Organizer**:
     Click **FinGroww** $\rightarrow$ **🧹 Clean Duplicates & Reformat All (Daily Tables)** to automatically group any past records into daily tables with dynamic date titles, white backgrounds, and blank row dividers.

@@ -155,22 +155,25 @@ function updatePopupUi(payload) {
     "kpi-val " + (totalPnl > 0 ? "val-green" : totalPnl < 0 ? "val-red" : "");
 
   const charges = Number(acc.total_charges || acc.charges || 0);
-  const netAfterCharges = totalPnl - charges;
+  let realized = Number(acc.realized_pnl !== undefined ? acc.realized_pnl : 0);
+  if (realized === 0 && (openPositions.length === 0 || !acc.unrealized_pnl)) {
+    realized = totalPnl;
+  }
 
   retEl.textContent = `${retPct >= 0 ? "+" : ""}${retPct.toFixed(2)}% Overall Return`;
   retEl.style.color =
     retPct > 0 ? "var(--green)" : retPct < 0 ? "var(--red)" : "var(--text-dim)";
 
-  // Update Professional Financial Breakdown Strip (Brokrage & Total Profit)
+  // Update Professional Financial Breakdown Strip (Charges & Taxes, Realized P&L directly from backend)
   const elBrokerage = document.getElementById("kpiBrokerageVal");
   if (elBrokerage) {
     elBrokerage.textContent = formatInr(charges);
   }
   const elTotalProfit = document.getElementById("kpiTotalProfitVal");
   if (elTotalProfit) {
-    elTotalProfit.textContent = (netAfterCharges > 0 ? "+" : "") + formatInr(netAfterCharges);
+    elTotalProfit.textContent = (realized > 0 ? "+" : "") + formatInr(realized);
     elTotalProfit.className =
-      "strip-value " + (netAfterCharges > 0 ? "val-green" : netAfterCharges < 0 ? "val-red" : "");
+      "strip-value " + (realized > 0 ? "val-green" : realized < 0 ? "val-red" : "");
   }
 
   document.getElementById("accountEquity").textContent = formatInr(
@@ -427,7 +430,7 @@ function computeDailyPnlSummary(historyByUser, targetUser) {
           user: user,
           pnl: pnl,
           charges: dayCharges,
-          netAfterCharges: pnl - dayCharges,
+          netAfterCharges: pnl,
           tradesCount: trades,
           winningTrades: Number(dayData.winningTrades) || 0,
           losingTrades: Number(dayData.losingTrades) || 0,
@@ -710,7 +713,7 @@ function renderDailyPnlView() {
       }
 
       const chg = Number(r.charges) || 0;
-      const totalProfitVal = pnl - chg;
+      const realizedVal = Number(r.realizedPnl !== undefined && r.realizedPnl !== 0 ? r.realizedPnl : (openPos === 0 ? pnl : 0));
 
       // Single Profile View: Sleek Segmented Metrics Grid (ZERO text wrapping)
       return `
@@ -736,13 +739,13 @@ function renderDailyPnlView() {
             <span class="chip-label">TRADES</span>
             <span class="chip-val">${trades}</span>
           </div>
-          <div class="metric-chip" title="Brokrage & Taxes">
-            <span class="chip-label">BROKRAGE</span>
+          <div class="metric-chip" title="Charges & Taxes">
+            <span class="chip-label">CHARGES</span>
             <span class="chip-val val-gold">${formatInr(chg)}</span>
           </div>
-          <div class="metric-chip" title="Total Profit after Brokrage">
-            <span class="chip-label">TOTAL PROFIT</span>
-            <span class="chip-val ${totalProfitVal >= 0 ? "val-win" : "val-loss"}">${(totalProfitVal > 0 ? "+" : "") + formatInr(totalProfitVal)}</span>
+          <div class="metric-chip" title="Realized P&L from closed trades">
+            <span class="chip-label">REALIZED</span>
+            <span class="chip-val ${realizedVal >= 0 ? "val-win" : "val-loss"}">${(realizedVal > 0 ? "+" : "") + formatInr(realizedVal)}</span>
           </div>
           <div class="metric-chip" title="Winning / Losing trades">
             <span class="chip-label">W / L</span>
@@ -801,7 +804,7 @@ function exportDailyPnlToCsv() {
 
       const pnl = Number(dayRecord.totalPnl) || 0;
       const charges = Number(dayRecord.charges !== undefined ? dayRecord.charges : (cachedAccount?.total_charges || 0)) || 0;
-      const netAfterCharges = pnl - charges;
+      const netAfterCharges = pnl;
       const realized = Number(dayRecord.realizedPnl) || 0;
       const unrealized = Number(dayRecord.unrealizedPnl) || 0;
       const eq = Number(dayRecord.equity) || 100000;
@@ -1349,7 +1352,7 @@ function setupGsheetSyncControls() {
                 ? dayRecord.charges
                 : (cachedAccount?.user_name === userName ? (cachedAccount?.total_charges || 0) : 0)),
         ) || 0;
-        const netAfterCharges = pnl - charges;
+        const netAfterCharges = pnl;
 
         let realized = 0;
         let unrealized = 0;

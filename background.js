@@ -171,7 +171,7 @@ function updateDailyPnlRecord(profileName, accountObj, statusVal, activePosition
     dayName: dayName,
     totalPnl: totalPnl,
     charges: charges,
-    netAfterCharges: totalPnl - charges,
+    netAfterCharges: totalPnl,
     slippage: slippage,
     realizedPnl: realizedPnl,
     unrealizedPnl: unrealizedPnl,
@@ -980,7 +980,7 @@ async function syncDailyPnlToGoogleSheet(options = {}) {
             ? dayRecord.charges
             : (profAccount.total_charges !== undefined ? profAccount.total_charges : (profAccount.charges || 0))
         ) || 0;
-        const netAfterCharges = pnl - charges;
+        const netAfterCharges = pnl;
 
         let realized = 0;
         let unrealized = 0;

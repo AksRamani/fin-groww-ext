@@ -4,10 +4,10 @@
  * LAYOUT:
  * - Each day has its own dedicated table with dynamic date title: "📅 18 Nov 2026 (Wednesday)".
  * - Table Title Banner has a clean WHITE background with bold professional typography.
- * - Redundant "Date", "Day", and "Time (IST)" columns are removed so the table starts directly with "Trader / Profile".
+ * - Redundant "Date", "Day", and "Time (IST)" columns removed; table starts directly with "Trader / Profile".
+ * - All financial metrics (Net Total P&L, Charges & Taxes, Realized P&L, Unrealized P&L, Account Equity)
+ *   are fetched directly from the backend API without redundant in-extension calculations or formulas.
  * - A clean blank row separates each day's table.
- * - Column D (Total Profit) uses dynamic formula: =B{row}-C{row} (Total P&L - Brokrage).
- * - Real server Realized and Unrealized P&L populated for all traders.
  *
  * INSTRUCTIONS TO UPDATE / DEPLOY:
  * 1. Open your Google Sheet.
@@ -144,8 +144,7 @@ function doPost(e) {
 
 /**
  * Triggered automatically when user edits any cell in Google Sheets.
- * If user edits Col B (Total P&L) or Col C (Brokrage), Col D (Total Profit)
- * is dynamically recalculated: =B{row}-C{row}.
+ * Re-applies number formatting and status styling.
  */
 function onEdit(e) {
   try {
@@ -157,15 +156,10 @@ function onEdit(e) {
     const col = e.range.getColumn();
     if (row <= 2) return;
 
-    // Col 2 is Total P&L (Col B), Col 3 is Brokrage (Col C)
-    if (col === 2 || col === 3) {
+    if (col >= 2 && col <= 6) {
       const totalPnl = Number(sheet.getRange(row, 2).getValue()) || 0;
       const charges = Number(sheet.getRange(row, 3).getValue()) || 0;
-      const status = String(sheet.getRange(row, 9).getValue());
-
-      const netCell = sheet.getRange(row, 4);
-      netCell.setFormula(`=B${row}-C${row}`);
-
+      const status = String(sheet.getRange(row, 8).getValue());
       formatDataRow(sheet, row, totalPnl, charges, status);
     }
   } catch (err) {
@@ -297,8 +291,19 @@ function readExistingDaysFromSheet(sheet) {
       tradesCount = Number(row[8]) || 0;
       status = String(row[9] || "RUNNING");
       notes = String(row[10] || "");
+    } else if (Number(row[5]) >= 30000 || (row[7] && isNaN(Number(row[7])))) {
+      // 10-column layout (Col 0=Trader, Col 1=Net Total PnL, Col 2=Charges, Col 3=Realized, Col 4=Unrealized, Col 5=Equity, Col 6=Trades, Col 7=Status, Col 8=Notes)
+      trader = String(row[0] || "").trim();
+      totalPnl = Number(row[1]) || 0;
+      charges = Number(row[2]) || 0;
+      realized = Number(row[3]) || 0;
+      unrealized = Number(row[4]) || 0;
+      equity = Number(row[5]) || 100000;
+      tradesCount = Number(row[6]) || 0;
+      status = String(row[7] || "RUNNING");
+      notes = String(row[8] || "");
     } else if (row[1] !== undefined) {
-      // New 11-column layout (Col 0=Trader, Col 1=Total PnL, Col 2=Brokrage, Col 3=Total Profit...)
+      // Legacy 11-column layout (Col 0=Trader, Col 1=Total PnL, Col 2=Brokrage, Col 3=Total Profit, Col 4=Realized, Col 5=Unrealized, Col 6=Equity, Col 7=Trades, Col 8=Status, Col 9=Notes)
       trader = String(row[0] || "").trim();
       totalPnl = Number(row[1]) || 0;
       charges = Number(row[2]) || 0;
@@ -349,6 +354,7 @@ function readExistingDaysFromSheet(sheet) {
  * - DYNAMIC date title banner per sync: "📅 18 Nov 2026 (Wednesday)"
  * - WHITE background (#ffffff) with bold text for table title banner
  * - NO "Date", "Day", or "Time (IST)" columns in rows (all in title banner)
+ * - Pure backend metrics (Net Total P&L, Charges & Taxes, Realized P&L, Unrealized P&L, Equity)
  * - Blank row separator between tables
  */
 function renderAllDayTables(sheet, daysMap) {
@@ -357,12 +363,11 @@ function renderAllDayTables(sheet, daysMap) {
   const sortedDates = Object.keys(daysMap).sort((a, b) => a.localeCompare(b));
   if (sortedDates.length === 0) return;
 
-  // 11 Table Columns (Starting cleanly with Trader / Profile)
+  // 10 Table Columns directly from backend (No redundant calculations)
   const tableHeaders = [
     "Trader / Profile",
-    "Total P&L (₹)",
-    "Brokrage (₹)",
-    "Total Profit (₹)",
+    "Net Total P&L (₹)",
+    "Charges & Taxes (₹)",
     "Realized P&L (₹)",
     "Unrealized P&L (₹)",
     "Account Equity (₹)",
@@ -385,7 +390,7 @@ function renderAllDayTables(sheet, daysMap) {
     const titleCell = sheet.getRange(currentRow, 1);
     titleCell.setValue(dynamicTitleText);
 
-    const titleRange = sheet.getRange(currentRow, 1, 1, 11);
+    const titleRange = sheet.getRange(currentRow, 1, 1, 10);
     titleRange.merge();
     titleRange.setBackground("#ffffff"); // WHITE BACKGROUND
     titleRange.setFontColor("#0f172a"); // Deep navy text
@@ -397,7 +402,7 @@ function renderAllDayTables(sheet, daysMap) {
     currentRow++;
 
     // 2. Table Column Headers Row
-    const headerRange = sheet.getRange(currentRow, 1, 1, 11);
+    const headerRange = sheet.getRange(currentRow, 1, 1, 10);
     headerRange.setValues([tableHeaders]);
     headerRange.setBackground("#1e293b"); // Deep slate navy
     headerRange.setFontColor("#f1f5f9"); // Crisp white
@@ -411,12 +416,10 @@ function renderAllDayTables(sheet, daysMap) {
     // 3. Profile Data Rows
     traders.forEach((tKey) => {
       const rec = records[tKey];
-      const netVal = rec.totalPnl - rec.charges;
       const rowValues = [
         rec.trader,
         rec.totalPnl,
         rec.charges,
-        netVal, // Formula set below
         rec.realized,
         rec.unrealized,
         rec.equity,
@@ -426,18 +429,15 @@ function renderAllDayTables(sheet, daysMap) {
         rec.lastSynced,
       ];
 
-      const rowRange = sheet.getRange(currentRow, 1, 1, 11);
+      const rowRange = sheet.getRange(currentRow, 1, 1, 10);
       rowRange.setValues([rowValues]);
-
-      // Dynamic formula: Col D (Total Profit) = Col B (Total P&L) - Col C (Brokrage)
-      sheet.getRange(currentRow, 4).setFormula(`=B${currentRow}-C${currentRow}`);
 
       formatDataRow(sheet, currentRow, rec.totalPnl, rec.charges, rec.status);
       currentRow++;
     });
 
     // 4. Blank row separator between tables
-    const blankRowRange = sheet.getRange(currentRow, 1, 1, 11);
+    const blankRowRange = sheet.getRange(currentRow, 1, 1, 10);
     blankRowRange.setBackground("#ffffff");
     blankRowRange.clearContent();
     sheet.setRowHeight(currentRow, 22);
@@ -452,7 +452,7 @@ function renderAllDayTables(sheet, daysMap) {
  */
 function formatDataRow(sheet, rowNum, pnl, charges, status) {
   try {
-    const rowRange = sheet.getRange(rowNum, 1, 1, 11);
+    const rowRange = sheet.getRange(rowNum, 1, 1, 10);
 
     // Zebra striping
     rowRange.setBackground(rowNum % 2 === 0 ? "#f8fafc" : "#ffffff");
@@ -464,47 +464,40 @@ function formatDataRow(sheet, rowNum, pnl, charges, status) {
     // Col 1: Trader / Profile (Left, Bold Navy)
     sheet.getRange(rowNum, 1).setHorizontalAlignment("left").setFontWeight("bold").setFontColor("#0f172a");
 
-    // Col 2: Total P&L (₹) - Right, Bold Green/Red
+    // Col 2: Net Total P&L (₹) - Right, Bold Green/Red
     const pnlCell = sheet.getRange(rowNum, 2);
     pnlCell.setHorizontalAlignment("right").setFontWeight("bold");
     pnlCell.setFontColor(pnl > 0 ? "#15803d" : pnl < 0 ? "#b91c1c" : "#475569");
     pnlCell.setNumberFormat("₹#,##0.00;[Red](₹#,##0.00);₹0.00");
 
-    // Col 3: Brokrage (₹) - Right, Bold Amber
+    // Col 3: Charges & Taxes (₹) - Right, Bold Amber
     const chgCell = sheet.getRange(rowNum, 3);
     chgCell.setHorizontalAlignment("right").setFontWeight("600");
     chgCell.setFontColor("#b45309");
     chgCell.setNumberFormat("₹#,##0.00;₹0.00");
 
-    // Col 4: Total Profit (₹) - Right, Bold Green/Red
-    const netCell = sheet.getRange(rowNum, 4);
-    netCell.setHorizontalAlignment("right").setFontWeight("bold");
-    const netVal = pnl - charges;
-    netCell.setFontColor(netVal > 0 ? "#15803d" : netVal < 0 ? "#b91c1c" : "#475569");
-    netCell.setNumberFormat("₹#,##0.00;[Red](₹#,##0.00);₹0.00");
-
-    // Col 5: Realized P&L (₹) - Right, Bold Green/Red
-    const realCell = sheet.getRange(rowNum, 5);
+    // Col 4: Realized P&L (₹) - Right, Bold Green/Red
+    const realCell = sheet.getRange(rowNum, 4);
     realCell.setHorizontalAlignment("right").setFontWeight("600");
     const realVal = Number(realCell.getValue()) || 0;
     realCell.setFontColor(realVal > 0 ? "#15803d" : realVal < 0 ? "#b91c1c" : "#475569");
     realCell.setNumberFormat("₹#,##0.00;[Red](₹#,##0.00);₹0.00");
 
-    // Col 6: Unrealized P&L (₹) - Right, Bold Green/Red
-    const unrealCell = sheet.getRange(rowNum, 6);
+    // Col 5: Unrealized P&L (₹) - Right, Bold Green/Red
+    const unrealCell = sheet.getRange(rowNum, 5);
     unrealCell.setHorizontalAlignment("right").setFontWeight("600");
     const unrealVal = Number(unrealCell.getValue()) || 0;
     unrealCell.setFontColor(unrealVal > 0 ? "#15803d" : unrealVal < 0 ? "#b91c1c" : "#475569");
     unrealCell.setNumberFormat("₹#,##0.00;[Red](₹#,##0.00);₹0.00");
 
-    // Col 7: Account Equity (₹) - Right
-    sheet.getRange(rowNum, 7).setHorizontalAlignment("right").setNumberFormat("₹#,##0.00;₹0.00");
+    // Col 6: Account Equity (₹) - Right
+    sheet.getRange(rowNum, 6).setHorizontalAlignment("right").setNumberFormat("₹#,##0.00;₹0.00");
 
-    // Col 8: Trades Count - Center
-    sheet.getRange(rowNum, 8).setHorizontalAlignment("center").setNumberFormat("#,##0");
+    // Col 7: Trades Count - Center
+    sheet.getRange(rowNum, 7).setHorizontalAlignment("center").setNumberFormat("#,##0");
 
-    // Col 9: Session Status - Center, Bold Green/Red/Gray
-    const statusCell = sheet.getRange(rowNum, 9);
+    // Col 8: Session Status - Center, Bold Green/Red/Gray
+    const statusCell = sheet.getRange(rowNum, 8);
     statusCell.setHorizontalAlignment("center").setFontWeight("bold");
     const stUpper = String(status || "").toUpperCase();
     if (stUpper.includes("RUNNING")) {
@@ -517,32 +510,31 @@ function formatDataRow(sheet, rowNum, pnl, charges, status) {
       statusCell.setFontColor("#334155");
     }
 
-    // Col 10: Win Rate / Notes - Left
-    sheet.getRange(rowNum, 10).setHorizontalAlignment("left");
+    // Col 9: Win Rate / Notes - Left
+    sheet.getRange(rowNum, 9).setHorizontalAlignment("left");
 
-    // Col 11: Last Synced At - Center, Muted
-    sheet.getRange(rowNum, 11).setHorizontalAlignment("center").setFontColor("#64748b").setFontSize(9);
+    // Col 10: Last Synced At - Center, Muted
+    sheet.getRange(rowNum, 10).setHorizontalAlignment("center").setFontColor("#64748b").setFontSize(9);
   } catch (e) {
     console.error("formatDataRow error on row " + rowNum + ":", e);
   }
 }
 
 /**
- * Optimal column widths for the 11 columns
+ * Optimal column widths for the 10 columns
  */
 function applyTableColumnWidths(sheet) {
   try {
     sheet.setColumnWidth(1, 190); // Trader / Profile
-    sheet.setColumnWidth(2, 145); // Total P&L (₹)
-    sheet.setColumnWidth(3, 135); // Brokrage (₹)
-    sheet.setColumnWidth(4, 150); // Total Profit (₹)
-    sheet.setColumnWidth(5, 140); // Realized P&L (₹)
-    sheet.setColumnWidth(6, 140); // Unrealized P&L (₹)
-    sheet.setColumnWidth(7, 145); // Account Equity (₹)
-    sheet.setColumnWidth(8, 100); // Trades Count
-    sheet.setColumnWidth(9, 125); // Session Status
-    sheet.setColumnWidth(10, 270); // Win Rate / Notes
-    sheet.setColumnWidth(11, 160); // Last Synced At
+    sheet.setColumnWidth(2, 150); // Net Total P&L (₹)
+    sheet.setColumnWidth(3, 145); // Charges & Taxes (₹)
+    sheet.setColumnWidth(4, 140); // Realized P&L (₹)
+    sheet.setColumnWidth(5, 140); // Unrealized P&L (₹)
+    sheet.setColumnWidth(6, 145); // Account Equity (₹)
+    sheet.setColumnWidth(7, 100); // Trades Count
+    sheet.setColumnWidth(8, 125); // Session Status
+    sheet.setColumnWidth(9, 270); // Win Rate / Notes
+    sheet.setColumnWidth(10, 160); // Last Synced At
   } catch (e) {}
 }
 

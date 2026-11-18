@@ -2209,7 +2209,7 @@
             user: user,
             pnl: pnl,
             charges: dayCharges,
-            netAfterCharges: pnl - dayCharges,
+            netAfterCharges: pnl,
             tradesCount: trades,
             winningTrades: Number(dayData.winningTrades) || 0,
             losingTrades: Number(dayData.losingTrades) || 0,
@@ -2411,7 +2411,7 @@
           }
 
               const chg = Number(r.charges) || 0;
-              const totalProfitVal = pnl - chg;
+              const realizedVal = Number(r.realizedPnl !== undefined && r.realizedPnl !== 0 ? r.realizedPnl : (openPos === 0 ? pnl : 0));
 
               return `
               <div class="fg-daily-card ${cardClass}">
@@ -2438,13 +2438,13 @@
                     <span class="fg-chip-label">TRADES</span>
                     <span class="fg-chip-val">${trades}</span>
                   </div>
-                  <div class="fg-metric-chip" title="Brokrage & Taxes">
-                    <span class="fg-chip-label">BROKRAGE</span>
+                  <div class="fg-metric-chip" title="Charges & Taxes">
+                    <span class="fg-chip-label">CHARGES</span>
                     <span class="fg-chip-val" style="color:#fbbf24;">${formatInr(chg)}</span>
                   </div>
-                  <div class="fg-metric-chip" title="Total Profit after Brokrage">
-                    <span class="fg-chip-label">TOTAL PROFIT</span>
-                    <span class="fg-chip-val ${totalProfitVal >= 0 ? "val-win" : "val-loss"}">${(totalProfitVal > 0 ? "+" : "") + formatInr(totalProfitVal)}</span>
+                  <div class="fg-metric-chip" title="Realized P&L from closed trades">
+                    <span class="fg-chip-label">REALIZED</span>
+                    <span class="fg-chip-val ${realizedVal >= 0 ? "val-win" : "val-loss"}">${(realizedVal > 0 ? "+" : "") + formatInr(realizedVal)}</span>
                   </div>
                   <div class="fg-metric-chip" title="Winning / Losing trades">
                     <span class="fg-chip-label">W / L</span>
