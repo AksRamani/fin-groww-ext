@@ -35,6 +35,8 @@ body {
   font-size: 13px;
   line-height: 1.4;
   user-select: none;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 /* Custom Sleek Scrollbar */
@@ -403,18 +405,6 @@ body {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  max-height: 250px;
-  overflow-y: auto;
-  padding-right: 2px;
-}
-
-.positions-list::-webkit-scrollbar {
-  width: 5px;
-}
-
-.positions-list::-webkit-scrollbar-thumb {
-  background: var(--border);
-  border-radius: 3px;
 }
 
 /* Position Item Card */
