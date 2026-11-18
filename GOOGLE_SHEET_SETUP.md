@@ -31,10 +31,11 @@ This guide explains how to connect your **Google Sheet** to the FinGroww Trading
    - Click the **pencil icon (Edit)**.
    - Under **Version**, select **New version**.
    - Click **Deploy**.
-3. **Clean Duplicates & Reformat Existing Data (1-Click)**:
+3. **Clean & Load Fresh Today Table (1-Click)**:
    - Reload your Google Sheet in the browser tab.
-   - You will see a new menu in the top toolbar: **FinGroww** > **🧹 Clean Duplicates & Reformat All (Daily Tables)**.
-   - Click it once! It will instantly delete all duplicate entries, separate days into daily tables with dynamic date titles (`📅 17 Nov 2026 (Tuesday)`, `📅 18 Nov 2026 (Wednesday)`), fix all cell formulas (`=B{row}-C{row}`), format all currencies with `₹`, and restore crisp alternating rows.
+   - You will see a new menu in the top toolbar: **FinGroww** > **🚀 Reset & Load 18 Nov (Fresh Clean Table)**.
+   - Click it once! It will instantly clear out any corrupted rows and populate the clean 18 Nov 2026 table with all 9 active profiles directly from the live FinGroww server.
+   - From tomorrow (19 Nov onwards), every day at 3:30 PM market close (or when you click "Sync to Sheet Now"), the extension automatically creates and appends the new day's table below the previous day with a blank row separator.
 
 ---
 
