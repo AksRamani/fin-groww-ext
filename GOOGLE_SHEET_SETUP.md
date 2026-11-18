@@ -33,8 +33,8 @@ This guide explains how to connect your **Google Sheet** to the FinGroww Trading
    - Click **Deploy**.
 3. **Clean Duplicates & Reformat Existing Data (1-Click)**:
    - Reload your Google Sheet in the browser tab.
-   - You will see a new menu in the top toolbar: **FinGroww** > **🧹 Clean Duplicates & Reformat All**.
-   - Click it once! It will instantly delete all duplicate entries, fix all cell formulas (`=E{row}-F{row}`), format all currencies with `₹`, and restore crisp alternating rows.
+   - You will see a new menu in the top toolbar: **FinGroww** > **🧹 Clean Duplicates & Reformat All (Daily Tables)**.
+   - Click it once! It will instantly delete all duplicate entries, separate days into daily tables with dynamic date titles (`📅 17 Nov 2026 (Tuesday)`, `📅 18 Nov 2026 (Wednesday)`), fix all cell formulas (`=B{row}-C{row}`), format all currencies with `₹`, and restore crisp alternating rows.
 
 ---
 
