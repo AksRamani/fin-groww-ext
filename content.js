@@ -834,6 +834,26 @@
       box-shadow: 0 0 10px rgba(239, 68, 68, 0.4) !important;
     }
 
+    .fg-btn-export-trades {
+      background: rgba(56, 189, 248, 0.12) !important;
+      border: 1px solid rgba(56, 189, 248, 0.35) !important;
+      color: #38bdf8 !important;
+      padding: 4px 11px !important;
+      border-radius: 6px !important;
+      font-size: 11px !important;
+      font-weight: 600 !important;
+      cursor: pointer !important;
+      transition: all 0.2s ease !important;
+      white-space: nowrap !important;
+    }
+
+    .fg-btn-export-trades:hover {
+      background: #0284c7 !important;
+      border-color: #38bdf8 !important;
+      color: #ffffff !important;
+      box-shadow: 0 0 10px rgba(56, 189, 248, 0.4) !important;
+    }
+
     .fg-drawer-body {
       overflow-y: auto !important;
       max-height: 420px !important;
@@ -1186,6 +1206,9 @@
           <span class="fg-drawer-meta-pill" id="fg-drawer-equity">💰 Equity: ₹0</span>
         </div>
         <div class="fg-drawer-actions">
+          <button type="button" class="fg-btn-export-trades" id="fg-btn-export-trades" title="Export all trade details (loss, profit, exit reason) for selected profile as CSV">
+            📥 Export Trades CSV
+          </button>
           <button type="button" class="fg-btn-close-all" id="fg-btn-close-all" title="Close all open trades for this profile">
             <span>⚠️</span> Exit All Positions
           </button>
@@ -1463,6 +1486,29 @@
       }
     });
 
+    // Export Selected Profile Trade Details CSV
+    const exportTradesBtn = shadowRoot.getElementById("fg-btn-export-trades");
+    if (exportTradesBtn) {
+      exportTradesBtn.addEventListener("click", () => {
+        const targetProf = currentProfile;
+        exportTradesBtn.disabled = true;
+        exportTradesBtn.textContent = "⏳ Fetching 150+ Trades...";
+        chrome.runtime.sendMessage({ type: "EXPORT_TRADES_CSV", profile: targetProf }, (res) => {
+          exportTradesBtn.disabled = false;
+          if (res && res.success) {
+            exportTradesBtn.textContent = `✅ Exported ${res.count} Trades!`;
+            showToast(`Exported ${res.count} trades for [${targetProf}] to CSV!`, false);
+          } else {
+            exportTradesBtn.textContent = "⚠️ Export Failed";
+            showToast(res?.error || "Failed to export trades CSV", true);
+          }
+          setTimeout(() => {
+            exportTradesBtn.textContent = "📥 Export Trades CSV";
+          }, 3500);
+        });
+      });
+    }
+
     // Draggable logic for the minimized restore pill
     const setupDraggablePill = (pill, onRestoreClick) => {
       let isDragging = false;
@@ -1676,24 +1722,64 @@
     }
   }
 
+  // Fetch real server profiles directly from web API to guarantee all 12 profiles appear
+  async function fetchLiveProfilesList() {
+    const hosts = ["https://fingroww-trading.onrender.com", "http://127.0.0.1:8787"];
+    for (const host of hosts) {
+      try {
+        const res = await fetch(`${host}/api/paper/profiles`, { headers: { "Content-Type": "application/json" } });
+        if (res.ok) {
+          const data = await res.json();
+          const list = Array.isArray(data) ? data : (data.profiles || []);
+          if (list && list.length > 0) {
+            profilesList = list;
+            chrome.storage.local.set({ fg_profiles_cache: list });
+            renderProfileSelectors();
+            return list;
+          }
+        }
+      } catch (e) {}
+    }
+    return null;
+  }
+
   // Render Profile Selectors on bar and drawer
   function renderProfileSelectors() {
     const barSel = shadowRoot?.getElementById("fg-bar-profile-select");
     const drawerSel = shadowRoot?.getElementById("fg-drawer-profile-select");
     const dailyUserSel = shadowRoot?.getElementById("fg-drawer-daily-user-select");
 
-    if (profilesList && profilesList.length > 0) {
-      const optionsHtml = profilesList.map((p) => {
+    // Gather all known profiles from profilesList, leaderboard, and server
+    const profileMap = new Map();
+    if (Array.isArray(profilesList)) {
+      profilesList.forEach(p => {
+        const name = typeof p === "string" ? p : p.user_name;
+        if (name) profileMap.set(name, p);
+      });
+    }
+    if (Array.isArray(leaderboardData)) {
+      leaderboardData.forEach(p => {
+        const name = p.user_name || p.name;
+        if (name && !profileMap.has(name)) {
+          profileMap.set(name, p);
+        }
+      });
+    }
+
+    const allProfiles = Array.from(profileMap.values());
+    if (allProfiles.length > 0) {
+      const optionsHtml = allProfiles.map((p) => {
         const u = typeof p === "string" ? p : p.user_name;
+        const style = p.trading_style ? ` (${p.trading_style})` : "";
         const isSel = u === currentProfile ? "selected" : "";
-        return `<option value="${u}" ${isSel}>${u}</option>`;
+        return `<option value="${u}" ${isSel}>${u}${style}</option>`;
       }).join("");
 
-      if (barSel && (barSel.innerHTML.length < 50 || barSel.value !== currentProfile)) {
+      if (barSel && (barSel.children.length !== allProfiles.length || barSel.value !== currentProfile)) {
         barSel.innerHTML = optionsHtml;
         barSel.value = currentProfile;
       }
-      if (drawerSel && (drawerSel.innerHTML.length < 50 || drawerSel.value !== currentProfile)) {
+      if (drawerSel && (drawerSel.children.length !== allProfiles.length || drawerSel.value !== currentProfile)) {
         drawerSel.innerHTML = optionsHtml;
         drawerSel.value = currentProfile;
       }
@@ -1701,15 +1787,7 @@
 
     // Populate Daily P&L user filter (Strictly Real Server Profiles)
     if (dailyUserSel) {
-      const userSet = new Set();
-      profilesList.forEach(p => {
-        const u = typeof p === "string" ? p : p.user_name;
-        if (u) userSet.add(u);
-      });
-      leaderboardData.forEach(p => {
-        const u = p.user_name || p.name;
-        if (u) userSet.add(u);
-      });
+      const userSet = new Set(profileMap.keys());
       Object.keys(cachedDailyHistory?.byUser || {}).forEach(u => {
         if (userSet.size === 0 || userSet.has(u)) userSet.add(u);
       });
@@ -2356,6 +2434,10 @@
         currentProfile = changes.fg_selected_profile.newValue || currentProfile;
         renderProfileSelectors();
       }
+      if (changes.fg_profiles_cache && Array.isArray(changes.fg_profiles_cache.newValue)) {
+        profilesList = changes.fg_profiles_cache.newValue;
+        renderProfileSelectors();
+      }
       if (changes.fg_latest_data) {
         if (typeof changes.fg_latest_data.newValue?.is_market_open === "boolean") {
           serverMarketOpen = changes.fg_latest_data.newValue.is_market_open;
@@ -2419,7 +2501,19 @@
     setInterval(updateMarketVisibility, 1000);
 
     try {
-      const stored = await chrome.storage.local.get(["fg_latest_data", "fg_selected_profile", "fg_is_minimized", "fg_pill_pos", "fg_show_after_hours", "fg_daily_pnl_history"]);
+      const stored = await chrome.storage.local.get([
+        "fg_latest_data",
+        "fg_selected_profile",
+        "fg_is_minimized",
+        "fg_pill_pos",
+        "fg_show_after_hours",
+        "fg_daily_pnl_history",
+        "fg_profiles_cache"
+      ]);
+      if (stored.fg_profiles_cache && Array.isArray(stored.fg_profiles_cache) && stored.fg_profiles_cache.length > 0) {
+        profilesList = stored.fg_profiles_cache;
+        renderProfileSelectors();
+      }
       if (stored.fg_daily_pnl_history) {
         cachedDailyHistory = filterRealHistory(stored.fg_daily_pnl_history);
       }
@@ -2467,6 +2561,9 @@
       } else {
         chrome.runtime.sendMessage({ type: "FORCE_REFRESH" });
       }
+
+      // Always fetch real server profiles to ensure all 12 profiles show up
+      fetchLiveProfilesList();
     } catch (e) {
       console.warn("[FinGroww Status Bar] Storage read error:", e);
     }

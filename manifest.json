@@ -5,7 +5,8 @@
   "description": "Real-time trading status bar on all browser tabs showing live open positions, current price (LTP), overall P&L, and leaderboard rank.",
   "permissions": [
     "storage",
-    "alarms"
+    "alarms",
+    "downloads"
   ],
   "host_permissions": [
     "<all_urls>",

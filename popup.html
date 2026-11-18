@@ -97,6 +97,45 @@
       </div>
     </section>
 
+    <!-- End-of-Day Trade Details CSV Export Card (Bottom next to Open Trades) -->
+    <section class="settings-card trades-export-card">
+      <div class="trades-export-title-row">
+        <span class="trades-export-icon">📑</span>
+        <div class="trades-export-title-group">
+          <div class="trades-export-title">
+            <span>All Trade Details CSV</span>
+            <span id="tradesExportCountBadge" class="count-pill">-- Trades</span>
+          </div>
+          <div class="trades-export-desc" id="tradesExportStatusDesc">
+            Download complete trade log (P&L, exit reasons, prices, duration) for selected profile
+          </div>
+        </div>
+      </div>
+
+      <div class="trades-export-action-row">
+        <button type="button" id="btnExportTradesCsv" class="btn-export-trades-primary" title="Export all trade details for selected profile to CSV now">
+          <span id="exportTradesIcon">📥</span> Export Trade Details CSV
+        </button>
+      </div>
+
+      <div class="setting-row trades-auto-row">
+        <div class="setting-info">
+          <div class="setting-title" style="font-size:11px;">
+            <span>Auto-download at Market Close (3:30 PM IST)</span>
+          </div>
+          <div class="setting-desc" id="tradesLastDownloadTime">
+            Automatically saves CSV when market closes
+          </div>
+        </div>
+        <label class="switch switch-sm" title="Automatically download trade details CSV after market closes at 3:30 PM IST">
+          <input type="checkbox" id="chkAutoDownloadTradesCsv" checked>
+          <span class="slider round"></span>
+        </label>
+      </div>
+
+      <div id="tradesExportAlertMsg" class="trades-export-msg" style="display: none;"></div>
+    </section>
+
     <!-- Market Hours & Visibility Settings -->
     <section class="settings-card">
       <div class="setting-row">
@@ -124,7 +163,7 @@
       <div class="profile-select-row">
         <label for="selDailyUser" class="label-xs">SELECT TRADER PROFILE</label>
         <select id="selDailyUser" class="profile-select">
-          <option value="Aks-new-55k">👤 Aks-new-55k</option>
+          <option value="">Loading profiles...</option>
         </select>
       </div>
     </section>
@@ -185,8 +224,11 @@
         <button type="button" id="btnSyncGsheetNow" class="btn-gsheet-sync" title="Sync Today's Closing P&L to Google Sheet">
           <span id="gsheetSyncIcon">📤</span> Sync to Sheet Now
         </button>
-        <button type="button" id="btnExportCsv" class="btn-export-csv" title="Download Full Daily P&L as CSV file">
-          <span>📥</span> Export CSV
+        <button type="button" id="btnExportTradesCsvDaily" class="btn-export-trades-daily" title="Export all trade details for selected profile to CSV">
+          <span>📑</span> Export Trades CSV
+        </button>
+        <button type="button" id="btnExportCsv" class="btn-export-csv" title="Download Full Daily P&L Ledger as CSV file">
+          <span>📥</span> Daily Ledger
         </button>
       </div>
       <div id="gsheetLastSyncMsg" class="gsheet-last-sync-msg"></div>

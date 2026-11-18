@@ -39,40 +39,67 @@ function formatInr(val) {
   const num = Number(val) || 0;
   const sign = num < 0 ? "-" : "";
   const abs = Math.abs(num);
-  return sign + "₹" + abs.toLocaleString("en-IN", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  });
+  return (
+    sign +
+    "₹" +
+    abs.toLocaleString("en-IN", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })
+  );
 }
 
 // Update popup UI with latest synchronized data (Stale-While-Revalidate)
 function updatePopupUi(payload) {
   if (!payload) return;
 
-  const { profile, account, positions, status, leaderboard, profiles } = payload;
+  const { profile, account, positions, status, leaderboard, profiles } =
+    payload;
   currentProfile = profile || currentProfile;
 
   if (account && Object.keys(account).length > 0) cachedAccount = account;
-  if (leaderboard && Array.isArray(leaderboard) && leaderboard.length > 0) cachedLeaderboard = leaderboard;
-  if (profiles && Array.isArray(profiles) && profiles.length > 0) cachedProfiles = profiles;
+  if (leaderboard && Array.isArray(leaderboard) && leaderboard.length > 0)
+    cachedLeaderboard = leaderboard;
+  if (profiles && Array.isArray(profiles) && profiles.length > 0)
+    cachedProfiles = profiles;
   if (positions && Array.isArray(positions)) {
-    const isSuspectEmpty = positions.length === 0 && (!account || Object.keys(account).length === 0);
+    const isSuspectEmpty =
+      positions.length === 0 && (!account || Object.keys(account).length === 0);
     if (!isSuspectEmpty || cachedPositions.length === 0) {
       cachedPositions = positions;
     }
   }
 
-  // 1. Populate Profile Selector
+  // 1. Populate Profile Selector (Merge all real profiles from server)
   const sel = document.getElementById("selProfile");
-  const profList = cachedProfiles;
-  if (sel && profList && profList.length > 0) {
-    if (sel.children.length <= 1 || sel.value !== currentProfile) {
-      sel.innerHTML = profList.map((p) => {
-        const u = typeof p === "string" ? p : p.user_name;
-        const style = p.trading_style ? ` (${p.trading_style})` : "";
-        const isSel = u === currentProfile ? "selected" : "";
-        return `<option value="${u}" ${isSel}>${u}${style}</option>`;
-      }).join("");
+  const profileMap = new Map();
+  if (Array.isArray(cachedProfiles)) {
+    cachedProfiles.forEach((p) => {
+      const u = typeof p === "string" ? p : p.user_name;
+      if (u) profileMap.set(u, p);
+    });
+  }
+  if (Array.isArray(cachedLeaderboard)) {
+    cachedLeaderboard.forEach((p) => {
+      const u = p.user_name || p.name;
+      if (u && !profileMap.has(u)) profileMap.set(u, p);
+    });
+  }
+  const profList = Array.from(profileMap.values());
+
+  if (sel && profList.length > 0) {
+    if (
+      sel.children.length !== profList.length ||
+      sel.value !== currentProfile
+    ) {
+      sel.innerHTML = profList
+        .map((p) => {
+          const u = typeof p === "string" ? p : p.user_name;
+          const style = p.trading_style ? ` (${p.trading_style})` : "";
+          const isSel = u === currentProfile ? "selected" : "";
+          return `<option value="${u}" ${isSel}>${u}${style}</option>`;
+        })
+        .join("");
       sel.value = currentProfile;
     }
   }
@@ -108,13 +135,30 @@ function updatePopupUi(payload) {
   const retEl = document.getElementById("returnPct");
 
   pnlEl.textContent = (totalPnl > 0 ? "+" : "") + formatInr(totalPnl);
-  pnlEl.className = "kpi-val " + (totalPnl > 0 ? "val-green" : (totalPnl < 0 ? "val-red" : ""));
+  pnlEl.className =
+    "kpi-val " + (totalPnl > 0 ? "val-green" : totalPnl < 0 ? "val-red" : "");
 
   retEl.textContent = `${retPct >= 0 ? "+" : ""}${retPct.toFixed(2)}% Overall Return`;
-  retEl.style.color = retPct > 0 ? "var(--green)" : (retPct < 0 ? "var(--red)" : "var(--text-dim)");
+  retEl.style.color =
+    retPct > 0 ? "var(--green)" : retPct < 0 ? "var(--red)" : "var(--text-dim)";
 
-  document.getElementById("accountEquity").textContent = formatInr(acc.account_equity || 100000);
-  document.getElementById("availableBal").textContent = `Balance: ${formatInr(acc.available_balance || 0)}`;
+  document.getElementById("accountEquity").textContent = formatInr(
+    acc.account_equity || 100000,
+  );
+  document.getElementById("availableBal").textContent =
+    `Balance: ${formatInr(acc.available_balance || 0)}`;
+
+  // Update Trade Details CSV badge
+  const tradesBadge = document.getElementById("tradesExportCountBadge");
+  if (tradesBadge) {
+    const totalTr =
+      entry?.total_trades !== undefined
+        ? entry.total_trades
+        : acc.closed_trades_count !== undefined
+          ? acc.closed_trades_count
+          : cachedPositions.length || "--";
+    tradesBadge.textContent = `${totalTr} Trades`;
+  }
 
   // 4. Trading Engine Status Badge
   const st = status || "RUNNING";
@@ -143,7 +187,12 @@ function updatePopupUi(payload) {
 
   // 6. Last Updated Time
   const now = new Date();
-  document.getElementById("lastUpdatedTime").textContent = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  document.getElementById("lastUpdatedTime").textContent =
+    now.toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
 }
 
 // Sort positions from highest profit to highest loss
@@ -178,32 +227,39 @@ function renderPositionsList(positions, flashMap) {
     return;
   }
 
-  container.innerHTML = sortedPositions.map((pos) => {
-    const key = pos.trade_id || pos.symbol;
-    const isBuy = pos.side === "BUY";
-    const pnl = Number(pos.unrealized_pnl) || 0;
-    const isProfit = pnl > 0;
-    const isLoss = pnl < 0;
-    const pnlClass = isProfit ? "val-green" : (isLoss ? "val-red" : "");
-    const borderClass = isProfit ? "pos-profit" : (isLoss ? "pos-loss" : "");
-    const flashClass = flashMap[key] === "up" ? "flash-up" : (flashMap[key] === "down" ? "flash-down" : "");
-    const ltp = (Number(pos.current_price) || 0).toFixed(2);
-    const entry = (Number(pos.entry_price) || 0).toFixed(2);
+  container.innerHTML = sortedPositions
+    .map((pos) => {
+      const key = pos.trade_id || pos.symbol;
+      const isBuy = pos.side === "BUY";
+      const pnl = Number(pos.unrealized_pnl) || 0;
+      const isProfit = pnl > 0;
+      const isLoss = pnl < 0;
+      const pnlClass = isProfit ? "val-green" : isLoss ? "val-red" : "";
+      const borderClass = isProfit ? "pos-profit" : isLoss ? "pos-loss" : "";
+      const flashClass =
+        flashMap[key] === "up"
+          ? "flash-up"
+          : flashMap[key] === "down"
+            ? "flash-down"
+            : "";
+      const ltp = (Number(pos.current_price) || 0).toFixed(2);
+      const entry = (Number(pos.entry_price) || 0).toFixed(2);
 
-    let pct = Number(pos.pnl_pct);
-    if (isNaN(pct) || pct === undefined || pct === null) {
-      if (Number(entry) > 0) {
-        pct = pos.side === "SELL" 
-          ? ((Number(entry) - Number(ltp)) / Number(entry)) * 100 
-          : ((Number(ltp) - Number(entry)) / Number(entry)) * 100;
-      } else {
-        pct = 0;
+      let pct = Number(pos.pnl_pct);
+      if (isNaN(pct) || pct === undefined || pct === null) {
+        if (Number(entry) > 0) {
+          pct =
+            pos.side === "SELL"
+              ? ((Number(entry) - Number(ltp)) / Number(entry)) * 100
+              : ((Number(ltp) - Number(entry)) / Number(entry)) * 100;
+        } else {
+          pct = 0;
+        }
       }
-    }
-    const pctSign = pct > 0 ? "+" : "";
-    const pctFormatted = `${pctSign}${pct.toFixed(2)}%`;
+      const pctSign = pct > 0 ? "+" : "";
+      const pctFormatted = `${pctSign}${pct.toFixed(2)}%`;
 
-    return `
+      return `
       <div class="pos-card ${borderClass}">
         <div class="pos-header">
           <div class="pos-symbol-wrap">
@@ -221,11 +277,12 @@ function renderPositionsList(positions, flashMap) {
         </div>
       </div>
     `;
-  }).join("");
+    })
+    .join("");
 
   // Attach Exit Handlers
   const exitBtns = container.querySelectorAll(".btn-pos-exit");
-  exitBtns.forEach(btn => {
+  exitBtns.forEach((btn) => {
     btn.addEventListener("click", () => {
       const tradeId = btn.getAttribute("data-trade-id");
       const sym = btn.getAttribute("data-symbol");
@@ -234,7 +291,7 @@ function renderPositionsList(positions, flashMap) {
       chrome.runtime.sendMessage({
         type: "CLOSE_POSITION",
         profile: currentProfile,
-        tradeId: tradeId
+        tradeId: tradeId,
       });
     });
   });
@@ -254,7 +311,7 @@ function updateMarketStatusIndicator(isOpenFromServer) {
       weekday: "short",
       hour: "numeric",
       minute: "numeric",
-      second: "numeric"
+      second: "numeric",
     });
     const parts = formatter.formatToParts(new Date());
     const map = {};
@@ -269,15 +326,15 @@ function updateMarketStatusIndicator(isOpenFromServer) {
     }
   } catch (e) {
     const now = new Date();
-    const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
-    const ist = new Date(utc + (3600000 * 5.5));
+    const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+    const ist = new Date(utc + 3600000 * 5.5);
     const day = ist.getDay();
     const totalMins = ist.getHours() * 60 + ist.getMinutes();
-    isLocalOpen = (day >= 1 && day <= 5) && (totalMins >= 540 && totalMins < 930);
+    isLocalOpen = day >= 1 && day <= 5 && totalMins >= 540 && totalMins < 930;
   }
 
   // Strictly closed past 3:30 PM IST or weekends; during hours, respect backend closed (holiday)
-  const isOpen = isLocalOpen && (isOpenFromServer !== false);
+  const isOpen = isLocalOpen && isOpenFromServer !== false;
 
   if (isOpen) {
     descEl.className = "setting-desc market-open";
@@ -316,7 +373,7 @@ function computeDailyPnlSummary(historyByUser, targetUser) {
             openPositionsCount: 0,
             winningUsers: 0,
             losingUsers: 0,
-            userBreakdown: []
+            userBreakdown: [],
           };
         }
 
@@ -326,7 +383,8 @@ function computeDailyPnlSummary(historyByUser, targetUser) {
         dateMap[dateKey].tradesCount += trades;
         dateMap[dateKey].winningTrades += Number(dayData.winningTrades) || 0;
         dateMap[dateKey].losingTrades += Number(dayData.losingTrades) || 0;
-        dateMap[dateKey].openPositionsCount += Number(dayData.openPositionsCount) || 0;
+        dateMap[dateKey].openPositionsCount +=
+          Number(dayData.openPositionsCount) || 0;
 
         if (pnl > 0) dateMap[dateKey].winningUsers++;
         else if (pnl < 0) dateMap[dateKey].losingUsers++;
@@ -338,7 +396,7 @@ function computeDailyPnlSummary(historyByUser, targetUser) {
           winningTrades: Number(dayData.winningTrades) || 0,
           losingTrades: Number(dayData.losingTrades) || 0,
           winRate: Number(dayData.winRate) || 0,
-          status: dayData.status || (pnl >= 0 ? "PROFIT" : "LOSS")
+          status: dayData.status || (pnl >= 0 ? "PROFIT" : "LOSS"),
         });
       }
     }
@@ -358,16 +416,16 @@ function computeDailyPnlSummary(historyByUser, targetUser) {
 
     const userDays = (historyByUser && historyByUser[targetUser]) || {};
     records = Object.values(userDays)
-      .filter(d => {
+      .filter((d) => {
         if (!d || d.isReal === false) return false;
         const trades = Number(d.tradesCount) || 0;
         const pnl = Number(d.totalPnl) || 0;
         const realized = Number(d.realizedPnl) || 0;
         return trades > 0 || pnl !== 0 || realized !== 0;
       })
-      .map(d => ({
+      .map((d) => ({
         ...d,
-        user: targetUser
+        user: targetUser,
       }));
   }
 
@@ -402,9 +460,12 @@ function computeDailyPnlSummary(historyByUser, targetUser) {
   }
 
   const totalTradingDays = records.length;
-  const overallWinRate = (totalWinsSum + totalLossesSum) > 0
-    ? (totalWinsSum / (totalWinsSum + totalLossesSum)) * 100
-    : (totalTradingDays > 0 ? (winDaysCount / totalTradingDays) * 100 : 0);
+  const overallWinRate =
+    totalWinsSum + totalLossesSum > 0
+      ? (totalWinsSum / (totalWinsSum + totalLossesSum)) * 100
+      : totalTradingDays > 0
+        ? (winDaysCount / totalTradingDays) * 100
+        : 0;
 
   return {
     records,
@@ -418,7 +479,7 @@ function computeDailyPnlSummary(historyByUser, targetUser) {
     totalTradesSum,
     totalWinsSum,
     totalLossesSum,
-    overallWinRate
+    overallWinRate,
   };
 }
 
@@ -433,28 +494,34 @@ function renderDailyPnlView() {
   if (selDailyUser) {
     const userSet = new Set();
     // Prioritize verified profiles from server
-    cachedProfiles.forEach(p => {
+    cachedProfiles.forEach((p) => {
       const u = typeof p === "string" ? p : p.user_name;
       if (u) userSet.add(u);
     });
-    cachedLeaderboard.forEach(p => {
+    cachedLeaderboard.forEach((p) => {
       const u = p.user_name || p.name;
       if (u) userSet.add(u);
     });
     // Add any profile from history that has real activity
-    Object.keys(historyByUser).forEach(u => {
+    Object.keys(historyByUser).forEach((u) => {
       if (userSet.size === 0 || userSet.has(u)) userSet.add(u);
     });
 
     const userList = Array.from(userSet).sort();
-    if (!selectedDailyUser || (!userSet.has(selectedDailyUser) && selectedDailyUser !== "ALL")) {
+    if (
+      !selectedDailyUser ||
+      (!userSet.has(selectedDailyUser) && selectedDailyUser !== "ALL")
+    ) {
       selectedDailyUser = currentProfile || userList[0] || "ALL";
     }
 
     let optionsHtml = `<option value="ALL" ${selectedDailyUser === "ALL" ? "selected" : ""}>👥 All Active Profiles</option>`;
-    optionsHtml += userList.map(u => 
-      `<option value="${u}" ${selectedDailyUser === u ? "selected" : ""}>👤 ${u}</option>`
-    ).join("");
+    optionsHtml += userList
+      .map(
+        (u) =>
+          `<option value="${u}" ${selectedDailyUser === u ? "selected" : ""}>👤 ${u}</option>`,
+      )
+      .join("");
 
     selDailyUser.innerHTML = optionsHtml;
     selDailyUser.value = selectedDailyUser;
@@ -473,14 +540,18 @@ function renderDailyPnlView() {
   const syncTimeEl = document.getElementById("dailySyncTime");
 
   if (profitEl) profitEl.textContent = "+" + formatInr(summary.totalProfit);
-  if (profitSubEl) profitSubEl.textContent = `${summary.winDaysCount} winning day${summary.winDaysCount === 1 ? "" : "s"}`;
+  if (profitSubEl)
+    profitSubEl.textContent = `${summary.winDaysCount} winning day${summary.winDaysCount === 1 ? "" : "s"}`;
   if (lossEl) lossEl.textContent = "-" + formatInr(summary.totalLoss);
-  if (lossSubEl) lossSubEl.textContent = `${summary.lossDaysCount} losing day${summary.lossDaysCount === 1 ? "" : "s"}`;
+  if (lossSubEl)
+    lossSubEl.textContent = `${summary.lossDaysCount} losing day${summary.lossDaysCount === 1 ? "" : "s"}`;
 
   if (netEl) {
     const sign = summary.netPnl > 0 ? "+" : "";
     netEl.textContent = sign + formatInr(summary.netPnl);
-    netEl.className = "daily-kpi-val " + (summary.netPnl > 0 ? "val-green" : (summary.netPnl < 0 ? "val-red" : ""));
+    netEl.className =
+      "daily-kpi-val " +
+      (summary.netPnl > 0 ? "val-green" : summary.netPnl < 0 ? "val-red" : "");
   }
 
   if (winRateEl) {
@@ -493,7 +564,10 @@ function renderDailyPnlView() {
   if (countBadge) countBadge.textContent = `${summary.totalTradingDays} Days`;
   if (syncTimeEl) {
     const now = new Date();
-    syncTimeEl.textContent = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    syncTimeEl.textContent = now.toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
   }
 
   // 3. Render Day Cards List
@@ -506,7 +580,7 @@ function renderDailyPnlView() {
     listContainer.innerHTML = `
       <div class="empty-state">
         <div class="empty-icon">📅</div>
-        <div class="empty-text">No real trading history logged yet for <strong>${isAllView ? "active profiles" : (selectedDailyUser || "this profile")}</strong></div>
+        <div class="empty-text">No real trading history logged yet for <strong>${isAllView ? "active profiles" : selectedDailyUser || "this profile"}</strong></div>
       </div>
     `;
     return;
@@ -514,31 +588,47 @@ function renderDailyPnlView() {
 
   let todayKey = "";
   try {
-    todayKey = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+    todayKey = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Kolkata",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
   } catch (e) {
     todayKey = new Date().toISOString().slice(0, 10);
   }
 
-  listContainer.innerHTML = summary.records.map((r) => {
-    const pnl = Number(r.totalPnl) || 0;
-    const isProfit = pnl > 0;
-    const isLoss = pnl < 0;
-    const isToday = r.date === todayKey;
+  listContainer.innerHTML = summary.records
+    .map((r) => {
+      const pnl = Number(r.totalPnl) || 0;
+      const isProfit = pnl > 0;
+      const isLoss = pnl < 0;
+      const isToday = r.date === todayKey;
 
-    const rowClass = isProfit ? "is-profit" : (isLoss ? "is-loss" : "is-breakeven");
-    const pillClass = isProfit ? "pill-profit" : (isLoss ? "pill-loss" : "pill-neutral");
-    const pnlSign = isProfit ? "+" : "";
+      const rowClass = isProfit
+        ? "is-profit"
+        : isLoss
+          ? "is-loss"
+          : "is-breakeven";
+      const pillClass = isProfit
+        ? "pill-profit"
+        : isLoss
+          ? "pill-loss"
+          : "pill-neutral";
+      const pnlSign = isProfit ? "+" : "";
 
-    // Dynamic trade statistics breakdown
-    const trades = Number(r.tradesCount) || 0;
-    const wins = Number(r.winningTrades) || 0;
-    const losses = Number(r.losingTrades) || 0;
-    const openPos = Number(r.openPositionsCount) || 0;
-    const wr = Number(r.winRate) || ((wins + losses) > 0 ? (wins / (wins + losses)) * 100 : 0);
+      // Dynamic trade statistics breakdown
+      const trades = Number(r.tradesCount) || 0;
+      const wins = Number(r.winningTrades) || 0;
+      const losses = Number(r.losingTrades) || 0;
+      const openPos = Number(r.openPositionsCount) || 0;
+      const wr =
+        Number(r.winRate) ||
+        (wins + losses > 0 ? (wins / (wins + losses)) * 100 : 0);
 
-    // If viewing ALL profiles, display the multi-trader breakdown list (Image 2 style)
-    if (isAllView && Array.isArray(r.userBreakdown)) {
-      return `
+      // If viewing ALL profiles, display the multi-trader breakdown list (Image 2 style)
+      if (isAllView && Array.isArray(r.userBreakdown)) {
+        return `
         <div class="daily-pnl-item ${rowClass}">
           <div class="daily-item-top">
             <div class="daily-date-group">
@@ -557,12 +647,17 @@ function renderDailyPnlView() {
           </div>
 
           <div class="daily-users-breakdown">
-            ${r.userBreakdown.map((u) => {
-              const uProfit = u.pnl > 0;
-              const uLoss = u.pnl < 0;
-              const uSign = uProfit ? "+" : "";
-              const uColorClass = uProfit ? "val-green" : (uLoss ? "val-red" : "");
-              return `
+            ${r.userBreakdown
+              .map((u) => {
+                const uProfit = u.pnl > 0;
+                const uLoss = u.pnl < 0;
+                const uSign = uProfit ? "+" : "";
+                const uColorClass = uProfit
+                  ? "val-green"
+                  : uLoss
+                    ? "val-red"
+                    : "";
+                return `
                 <div class="daily-user-breakdown-row">
                   <span class="user-row-name">👤 ${u.user}</span>
                   <span class="user-row-trades">${u.tradesCount} trade${u.tradesCount === 1 ? "" : "s"}</span>
@@ -571,14 +666,15 @@ function renderDailyPnlView() {
                   </span>
                 </div>
               `;
-            }).join("")}
+              })
+              .join("")}
           </div>
         </div>
       `;
-    }
+      }
 
-    // Single Profile View: Sleek Segmented Metrics Grid (ZERO text wrapping)
-    return `
+      // Single Profile View: Sleek Segmented Metrics Grid (ZERO text wrapping)
+      return `
       <div class="daily-pnl-item ${rowClass}">
         <div class="daily-item-top">
           <div class="daily-date-group">
@@ -593,7 +689,7 @@ function renderDailyPnlView() {
 
         <div class="daily-profile-row">
           <span class="daily-user-tag">👤 ${selectedDailyUser || r.user}</span>
-          <span class="daily-status-tag ${isProfit ? "tag-profit" : (isLoss ? "tag-loss" : "tag-neutral")}">${r.status || (isProfit ? "PROFIT" : (isLoss ? "LOSS" : "BREAKEVEN"))}</span>
+          <span class="daily-status-tag ${isProfit ? "tag-profit" : isLoss ? "tag-loss" : "tag-neutral"}">${r.status || (isProfit ? "PROFIT" : isLoss ? "LOSS" : "BREAKEVEN")}</span>
         </div>
 
         <div class="daily-metrics-bar">
@@ -620,14 +716,17 @@ function renderDailyPnlView() {
         </div>
       </div>
     `;
-  }).join("");
+    })
+    .join("");
 }
 
 // Generate & Download CSV of All Recorded Daily P&L (Strictly Profile-by-Profile, NO COMBINED ROWS)
 function exportDailyPnlToCsv() {
   const cleanHistory = filterRealHistory(cachedDailyHistory);
   const historyByUser = cleanHistory?.byUser || {};
-  const allDates = Array.from(new Set(Object.values(historyByUser).flatMap(u => Object.keys(u)))).sort((a, b) => b.localeCompare(a));
+  const allDates = Array.from(
+    new Set(Object.values(historyByUser).flatMap((u) => Object.keys(u))),
+  ).sort((a, b) => b.localeCompare(a));
 
   if (allDates.length === 0) {
     alert("No real daily P&L records available to export.");
@@ -635,7 +734,19 @@ function exportDailyPnlToCsv() {
   }
 
   const csvRows = [
-    ["Date", "Day", "Time (IST)", "Trader / Profile", "Total P&L (INR)", "Realized P&L (INR)", "Unrealized P&L (INR)", "Account Equity (INR)", "Trades Count", "Session Status", "Win Rate / Notes"]
+    [
+      "Date",
+      "Day",
+      "Time (IST)",
+      "Trader / Profile",
+      "Total P&L (INR)",
+      "Realized P&L (INR)",
+      "Unrealized P&L (INR)",
+      "Account Equity (INR)",
+      "Trades Count",
+      "Session Status",
+      "Win Rate / Notes",
+    ],
   ];
 
   for (const dKey of allDates) {
@@ -650,7 +761,9 @@ function exportDailyPnlToCsv() {
       const trades = Number(dayRecord.tradesCount) || 0;
       const wins = Number(dayRecord.winningTrades) || 0;
       const losses = Number(dayRecord.losingTrades) || 0;
-      const wr = Number(dayRecord.winRate) || ((wins + losses) > 0 ? (wins / (wins + losses)) * 100 : 0);
+      const wr =
+        Number(dayRecord.winRate) ||
+        (wins + losses > 0 ? (wins / (wins + losses)) * 100 : 0);
       const openPos = Number(dayRecord.openPositionsCount) || 0;
 
       let notes = `${trades} trades executed`;
@@ -671,7 +784,7 @@ function exportDailyPnlToCsv() {
           eq.toFixed(2),
           trades,
           `"${dayRecord.status || (pnl >= 0 ? "PROFIT" : "LOSS")}"`,
-          `"${notes}"`
+          `"${notes}"`,
         ]);
       }
     }
@@ -682,7 +795,7 @@ function exportDailyPnlToCsv() {
     return;
   }
 
-  const csvContent = csvRows.map(e => e.join(",")).join("\n");
+  const csvContent = csvRows.map((e) => e.join(",")).join("\n");
   const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -693,6 +806,324 @@ function exportDailyPnlToCsv() {
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
+}
+
+// Helper to escape values for CSV
+function escapeCsvCell(val) {
+  if (val === null || val === undefined) return "";
+  const s = String(val).replace(/\r?\n/g, " ").trim();
+  if (s.includes(",") || s.includes('"')) {
+    return '"' + s.replace(/"/g, '""') + '"';
+  }
+  return s;
+}
+
+// Download CSV content via browser Blob & <a> element
+function triggerBrowserDownload(csvText, filename) {
+  const bom = "\uFEFF";
+  const blob = new Blob([bom + csvText], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.setAttribute("href", url);
+  link.setAttribute("download", filename);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+// Direct client fetch fallback to export trades CSV if background worker is asleep
+async function directFetchAndExportCsv(targetProfile) {
+  const alertBox = document.getElementById("tradesExportAlertMsg");
+  const hosts = [
+    "https://fingroww-trading.onrender.com",
+    "http://127.0.0.1:8787",
+  ];
+  let tradesData = null;
+  let sessionData = null;
+
+  for (const host of hosts) {
+    try {
+      const [tRes, sRes] = await Promise.all([
+        fetch(
+          `${host}/api/paper/trades?user=${encodeURIComponent(targetProfile)}&limit=10000`,
+        ).then((r) => (r.ok ? r.json() : null)),
+        fetch(
+          `${host}/api/paper/session/state?user=${encodeURIComponent(targetProfile)}`,
+        ).then((r) => (r.ok ? r.json() : null)),
+      ]);
+      if (tRes || sRes) {
+        tradesData = tRes;
+        sessionData = sRes;
+        break;
+      }
+    } catch (e) {}
+  }
+
+  const closedTrades =
+    tradesData && Array.isArray(tradesData.trades) ? tradesData.trades : [];
+  const openPositions =
+    sessionData && Array.isArray(sessionData.active_positions)
+      ? sessionData.active_positions
+      : [];
+
+  if (closedTrades.length === 0 && openPositions.length === 0) {
+    if (alertBox) {
+      alertBox.className = "trades-export-msg error";
+      alertBox.textContent = `No trade records found for "${targetProfile}".`;
+      alertBox.style.display = "block";
+    }
+    return;
+  }
+
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const headers = [
+    "Trade ID",
+    "Trader Profile",
+    "Symbol",
+    "Instrument Name",
+    "Instrument Type",
+    "Side",
+    "Status",
+    "Quantity",
+    "Entry Price (INR)",
+    "Exit / Current Price (INR)",
+    "Target Price (INR)",
+    "Stop Loss (INR)",
+    "Gross P&L (INR)",
+    "Charges (INR)",
+    "Net P&L (INR)",
+    "Return %",
+    "Outcome",
+    "Exit Reason",
+    "Entry Time",
+    "Exit Time",
+    "Holding Duration",
+    "Strategy",
+    "Trailing State",
+    "Slippage (INR)",
+    "Allocated Margin (INR)",
+    "Expiry Date",
+    "Signal Rationale",
+  ];
+
+  const rows = [headers.join(",")];
+  for (const t of closedTrades) {
+    const net = Number(t.net_pnl) || 0;
+    const gross = Number(t.gross_pnl) || 0;
+    const charges = Number(t.charges) || 0;
+    const retPct = Number(t.return_pct) || 0;
+    const outcome = net > 0 ? "WIN" : net < 0 ? "LOSS" : "BREAKEVEN";
+    rows.push(
+      [
+        escapeCsvCell(t.trade_id || ""),
+        escapeCsvCell(targetProfile),
+        escapeCsvCell(t.symbol || ""),
+        escapeCsvCell(t.name || t.symbol || ""),
+        escapeCsvCell(t.instrument_type || "STOCK_OPTIONS"),
+        escapeCsvCell(t.side || "BUY"),
+        escapeCsvCell("CLOSED"),
+        escapeCsvCell(t.quantity || 0),
+        escapeCsvCell(Number(t.entry_price || 0).toFixed(2)),
+        escapeCsvCell(Number(t.exit_price || 0).toFixed(2)),
+        escapeCsvCell(Number(t.target_price || 0).toFixed(2)),
+        escapeCsvCell(Number(t.stop_loss || 0).toFixed(2)),
+        escapeCsvCell(gross.toFixed(2)),
+        escapeCsvCell(charges.toFixed(2)),
+        escapeCsvCell(net.toFixed(2)),
+        escapeCsvCell(retPct.toFixed(2) + "%"),
+        escapeCsvCell(outcome),
+        escapeCsvCell(t.exit_reason || "MANUAL_EXIT"),
+        escapeCsvCell(t.entry_time || ""),
+        escapeCsvCell(t.exit_time || t.closed_at || ""),
+        escapeCsvCell(t.holding_duration_str || ""),
+        escapeCsvCell(t.strategy || ""),
+        escapeCsvCell(t.trailing_state || ""),
+        escapeCsvCell(Number(t.slippage || 0).toFixed(2)),
+        escapeCsvCell(
+          Number(t.allocated_margin || t.used_amount || 0).toFixed(2),
+        ),
+        escapeCsvCell(t.expiry_date || t.expiry_label || ""),
+        escapeCsvCell(t.signal_rationale || ""),
+      ].join(","),
+    );
+  }
+
+  for (const pos of openPositions) {
+    const unPnl = Number(pos.unrealized_pnl) || 0;
+    const pnlPct = Number(pos.pnl_pct) || 0;
+    const outcome =
+      unPnl > 0 ? "UNREALIZED_WIN" : unPnl < 0 ? "UNREALIZED_LOSS" : "OPEN";
+    rows.push(
+      [
+        escapeCsvCell(pos.trade_id || ""),
+        escapeCsvCell(targetProfile),
+        escapeCsvCell(pos.symbol || ""),
+        escapeCsvCell(pos.name || pos.symbol || ""),
+        escapeCsvCell(pos.instrument_type || "STOCK_OPTIONS"),
+        escapeCsvCell(pos.side || "BUY"),
+        escapeCsvCell("OPEN"),
+        escapeCsvCell(pos.quantity || 0),
+        escapeCsvCell(Number(pos.entry_price || 0).toFixed(2)),
+        escapeCsvCell(
+          Number(pos.current_price || pos.ltp || pos.entry_price || 0).toFixed(
+            2,
+          ),
+        ),
+        escapeCsvCell(Number(pos.target_price || 0).toFixed(2)),
+        escapeCsvCell(Number(pos.stop_loss || 0).toFixed(2)),
+        escapeCsvCell(unPnl.toFixed(2)),
+        escapeCsvCell(
+          Number(pos.total_charges || pos.entry_charges || 0).toFixed(2),
+        ),
+        escapeCsvCell(unPnl.toFixed(2)),
+        escapeCsvCell(pnlPct.toFixed(2) + "%"),
+        escapeCsvCell(outcome),
+        escapeCsvCell("OPEN_POSITION"),
+        escapeCsvCell(pos.entry_time || ""),
+        escapeCsvCell("-"),
+        escapeCsvCell(pos.holding_duration_display || "-"),
+        escapeCsvCell(pos.strategy || ""),
+        escapeCsvCell(pos.trailing_state || ""),
+        escapeCsvCell(Number(pos.slippage || 0).toFixed(2)),
+        escapeCsvCell(
+          Number(pos.allocated_margin || pos.used_amount || 0).toFixed(2),
+        ),
+        escapeCsvCell(pos.expiry_date || pos.expiry_label || ""),
+        escapeCsvCell(pos.signal_rationale || ""),
+      ].join(","),
+    );
+  }
+
+  const totalCount = closedTrades.length + openPositions.length;
+  const csvContent = rows.join("\r\n");
+  const sanitizedProfile = targetProfile.replace(/[^a-zA-Z0-9_-]/g, "_");
+  const filename = `FinGroww_Trades_${sanitizedProfile}_${todayIso}.csv`;
+
+  triggerBrowserDownload(csvContent, filename);
+
+  if (alertBox) {
+    alertBox.className = "trades-export-msg success";
+    alertBox.textContent = `✅ Successfully exported ${totalCount} trades for ${targetProfile} to ${filename}!`;
+    alertBox.style.display = "block";
+  }
+}
+
+// Controller to export selected profile's trades CSV
+async function exportSelectedProfileTradesCsv() {
+  const btn = document.getElementById("btnExportTradesCsv");
+  const btnDaily = document.getElementById("btnExportTradesCsvDaily");
+  const alertBox = document.getElementById("tradesExportAlertMsg");
+  const targetProfile =
+    currentProfile || document.getElementById("selProfile")?.value;
+
+  if (!targetProfile) {
+    if (alertBox) {
+      alertBox.className = "trades-export-msg error";
+      alertBox.textContent = "Please select a trader profile first.";
+      alertBox.style.display = "block";
+    }
+    return;
+  }
+
+  const setButtonsLoading = (loading) => {
+    if (btn) {
+      btn.disabled = loading;
+      btn.innerHTML = loading
+        ? `<span>⏳</span> Fetching 150+ Trades...`
+        : `<span id="exportTradesIcon">📥</span> Export Trade Details CSV`;
+    }
+    if (btnDaily) {
+      btnDaily.disabled = loading;
+      btnDaily.innerHTML = loading
+        ? `<span>⏳</span> Fetching...`
+        : `<span>📑</span> Export Trades CSV`;
+    }
+  };
+
+  setButtonsLoading(true);
+  if (alertBox) {
+    alertBox.className = "trades-export-msg";
+    alertBox.textContent = `Fetching all trade details for "${targetProfile}" from server...`;
+    alertBox.style.display = "block";
+  }
+
+  try {
+    chrome.runtime.sendMessage(
+      { type: "EXPORT_TRADES_CSV", profile: targetProfile },
+      (res) => {
+        setButtonsLoading(false);
+        if (chrome.runtime.lastError) {
+          console.warn(
+            "[FinGroww Popup] Background error, fallback to direct fetch:",
+            chrome.runtime.lastError,
+          );
+          directFetchAndExportCsv(targetProfile);
+          return;
+        }
+
+        if (res && res.success) {
+          if (alertBox) {
+            alertBox.className = "trades-export-msg success";
+            alertBox.textContent = `✅ Successfully exported ${res.count} trades for ${targetProfile} to ${res.filename}!`;
+            alertBox.style.display = "block";
+          }
+          // Trigger browser download if background downloadId not created
+          if (
+            res.csvContent &&
+            (!res.downloadId || typeof chrome.downloads === "undefined")
+          ) {
+            triggerBrowserDownload(res.csvContent, res.filename);
+          }
+        } else {
+          if (alertBox) {
+            alertBox.className = "trades-export-msg error";
+            alertBox.textContent = `⚠️ ${res?.error || "No trade details found for this profile."}`;
+            alertBox.style.display = "block";
+          }
+        }
+      },
+    );
+  } catch (err) {
+    setButtonsLoading(false);
+    console.error(
+      "[FinGroww Popup] exportSelectedProfileTradesCsv error:",
+      err,
+    );
+    directFetchAndExportCsv(targetProfile);
+  }
+}
+
+// Trade Details CSV Export UI Controllers
+function setupTradesExportControls() {
+  const btn = document.getElementById("btnExportTradesCsv");
+  const btnDaily = document.getElementById("btnExportTradesCsvDaily");
+  const chkAuto = document.getElementById("chkAutoDownloadTradesCsv");
+  const lastTime = document.getElementById("tradesLastDownloadTime");
+
+  if (btn) btn.addEventListener("click", exportSelectedProfileTradesCsv);
+  if (btnDaily)
+    btnDaily.addEventListener("click", exportSelectedProfileTradesCsv);
+
+  if (chkAuto) {
+    chrome.storage.local.get(
+      [
+        "fg_auto_download_csv_eod",
+        "fg_eod_csv_last_time",
+        "fg_eod_csv_last_msg",
+      ],
+      (res) => {
+        chkAuto.checked = res.fg_auto_download_csv_eod !== false;
+        if (lastTime && res.fg_eod_csv_last_time) {
+          lastTime.textContent = `Last: ${res.fg_eod_csv_last_time}`;
+        }
+      },
+    );
+
+    chkAuto.addEventListener("change", (e) => {
+      chrome.storage.local.set({ fg_auto_download_csv_eod: e.target.checked });
+    });
+  }
 }
 
 // Google Sheet Sync & Webhook UI Controllers
@@ -710,23 +1141,26 @@ function setupGsheetSyncControls() {
   const syncMsg = document.getElementById("gsheetLastSyncMsg");
 
   // Read stored Google Sheet config
-  chrome.storage.local.get([
-    "fg_gsheet_url",
-    "fg_gsheet_autosync",
-    "fg_gsheet_last_sync_date",
-    "fg_gsheet_last_sync_time",
-    "fg_gsheet_last_sync_status",
-    "fg_gsheet_last_sync_msg"
-  ], (res) => {
-    if (txtUrl && res.fg_gsheet_url) {
-      txtUrl.value = res.fg_gsheet_url;
-    }
-    if (chkAutoSync && res.fg_gsheet_autosync !== undefined) {
-      chkAutoSync.checked = res.fg_gsheet_autosync === true;
-    }
+  chrome.storage.local.get(
+    [
+      "fg_gsheet_url",
+      "fg_gsheet_autosync",
+      "fg_gsheet_last_sync_date",
+      "fg_gsheet_last_sync_time",
+      "fg_gsheet_last_sync_status",
+      "fg_gsheet_last_sync_msg",
+    ],
+    (res) => {
+      if (txtUrl && res.fg_gsheet_url) {
+        txtUrl.value = res.fg_gsheet_url;
+      }
+      if (chkAutoSync && res.fg_gsheet_autosync !== undefined) {
+        chkAutoSync.checked = res.fg_gsheet_autosync === true;
+      }
 
-    updateGsheetStatusUi(res);
-  });
+      updateGsheetStatusUi(res);
+    },
+  );
 
   function updateGsheetStatusUi(state) {
     if (!gsheetBadge) return;
@@ -737,19 +1171,23 @@ function setupGsheetSyncControls() {
     if (!url) {
       gsheetBadge.className = "gsheet-badge gsheet-badge-idle";
       gsheetBadge.textContent = "Not Configured";
-      if (gsheetDesc) gsheetDesc.textContent = "Click Config to connect Google Sheet";
+      if (gsheetDesc)
+        gsheetDesc.textContent = "Click Config to connect Google Sheet";
     } else if (status === "SUCCESS") {
       gsheetBadge.className = "gsheet-badge gsheet-badge-ok";
       gsheetBadge.textContent = lastDate ? `Synced (${lastDate})` : "Connected";
-      if (gsheetDesc) gsheetDesc.textContent = "Connected • Auto-syncs at 3:30 PM IST";
+      if (gsheetDesc)
+        gsheetDesc.textContent = "Connected • Auto-syncs at 3:30 PM IST";
     } else if (status === "ERROR") {
       gsheetBadge.className = "gsheet-badge gsheet-badge-err";
       gsheetBadge.textContent = "Sync Error";
-      if (gsheetDesc) gsheetDesc.textContent = "Error during last sync • Check Config";
+      if (gsheetDesc)
+        gsheetDesc.textContent = "Error during last sync • Check Config";
     } else {
       gsheetBadge.className = "gsheet-badge gsheet-badge-ok";
       gsheetBadge.textContent = "Connected";
-      if (gsheetDesc) gsheetDesc.textContent = "Connected • Auto-syncs at 3:30 PM IST";
+      if (gsheetDesc)
+        gsheetDesc.textContent = "Connected • Auto-syncs at 3:30 PM IST";
     }
 
     if (syncMsg && state?.fg_gsheet_last_sync_msg) {
@@ -776,16 +1214,22 @@ function setupGsheetSyncControls() {
         return;
       }
       if (url.includes("docs.google.com/spreadsheets")) {
-        alert("⚠️ You pasted the Google Sheet document URL!\n\nYou need the Apps Script Web App URL:\n1. In your sheet, click Extensions > Apps Script.\n2. Click Deploy > New deployment.\n3. Choose Web app, set access to 'Anyone', click Deploy.\n4. Copy the Web App URL (ends in /exec) and paste it here.");
+        alert(
+          "⚠️ You pasted the Google Sheet document URL!\n\nYou need the Apps Script Web App URL:\n1. In your sheet, click Extensions > Apps Script.\n2. Click Deploy > New deployment.\n3. Choose Web app, set access to 'Anyone', click Deploy.\n4. Copy the Web App URL (ends in /exec) and paste it here.",
+        );
         return;
       }
       if (!url.startsWith("http")) {
-        alert("Please enter a valid Google Apps Script Web App URL (starts with https://script.google.com/...)");
+        alert(
+          "Please enter a valid Google Apps Script Web App URL (starts with https://script.google.com/...)",
+        );
         return;
       }
       chrome.storage.local.set({ fg_gsheet_url: url }, () => {
         btnSave.textContent = "Saved ✓";
-        setTimeout(() => { btnSave.textContent = "Save"; }, 1500);
+        setTimeout(() => {
+          btnSave.textContent = "Save";
+        }, 1500);
         updateGsheetStatusUi({ fg_gsheet_url: url });
       });
     });
@@ -801,12 +1245,16 @@ function setupGsheetSyncControls() {
   // Direct sync function that runs right in popup (Strictly Profile-by-Profile, ONLY Real Data)
   async function performDirectSync(webhookUrl) {
     if (webhookUrl.includes("docs.google.com/spreadsheets")) {
-      throw new Error("Pasted Google Sheet link instead of Web App URL ending in /exec");
+      throw new Error(
+        "Pasted Google Sheet link instead of Web App URL ending in /exec",
+      );
     }
 
     const cleanHistory = filterRealHistory(cachedDailyHistory);
     const historyByUser = cleanHistory?.byUser || {};
-    const allDates = Array.from(new Set(Object.values(historyByUser).flatMap(u => Object.keys(u)))).sort((a, b) => a.localeCompare(b));
+    const allDates = Array.from(
+      new Set(Object.values(historyByUser).flatMap((u) => Object.keys(u))),
+    ).sort((a, b) => a.localeCompare(b));
 
     const rows = [];
     for (const dKey of allDates) {
@@ -821,7 +1269,9 @@ function setupGsheetSyncControls() {
         const trades = Number(dayRecord.tradesCount) || 0;
         const wins = Number(dayRecord.winningTrades) || 0;
         const losses = Number(dayRecord.losingTrades) || 0;
-        const wr = Number(dayRecord.winRate) || ((wins + losses) > 0 ? (wins / (wins + losses)) * 100 : 0);
+        const wr =
+          Number(dayRecord.winRate) ||
+          (wins + losses > 0 ? (wins / (wins + losses)) * 100 : 0);
         const openPos = Number(dayRecord.openPositionsCount) || 0;
 
         let notesText = `${trades} trades executed`;
@@ -842,7 +1292,7 @@ function setupGsheetSyncControls() {
             equity: eq,
             tradesCount: trades,
             status: dayRecord.status || (pnl >= 0 ? "PROFIT" : "LOSS"),
-            notes: notesText
+            notes: notesText,
           });
         }
       }
@@ -855,7 +1305,7 @@ function setupGsheetSyncControls() {
     const payload = JSON.stringify({
       action: "sync_daily_pnl",
       source: "FinGroww Chrome Extension",
-      rows: rows
+      rows: rows,
     });
 
     try {
@@ -864,7 +1314,7 @@ function setupGsheetSyncControls() {
         method: "POST",
         redirect: "follow",
         headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: payload
+        body: payload,
       });
       const text = await resp.text();
       try {
@@ -877,7 +1327,7 @@ function setupGsheetSyncControls() {
         method: "POST",
         mode: "no-cors",
         headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: payload
+        body: payload,
       });
     }
 
@@ -886,7 +1336,7 @@ function setupGsheetSyncControls() {
       fg_gsheet_last_sync_date: todayIso,
       fg_gsheet_last_sync_time: Date.now(),
       fg_gsheet_last_sync_status: "SUCCESS",
-      fg_gsheet_last_sync_msg: `Synced ${rows.length} rows to Google Sheet`
+      fg_gsheet_last_sync_msg: `Synced ${rows.length} rows to Google Sheet`,
     });
 
     return { count: rows.length };
@@ -902,13 +1352,17 @@ function setupGsheetSyncControls() {
           if (btnToggleConfig) btnToggleConfig.textContent = "✕ Close";
           if (txtUrl) {
             txtUrl.focus();
-            alert("Please paste your Google Apps Script Webhook URL and click Save first.");
+            alert(
+              "Please paste your Google Apps Script Webhook URL and click Save first.",
+            );
           }
           return;
         }
 
         if (url.includes("docs.google.com/spreadsheets")) {
-          alert("⚠️ You pasted the Google Sheet URL!\n\nPlease deploy the Apps Script Web App and paste the URL ending in /exec (see Config).");
+          alert(
+            "⚠️ You pasted the Google Sheet URL!\n\nPlease deploy the Apps Script Web App and paste the URL ending in /exec (see Config).",
+          );
           return;
         }
 
@@ -920,14 +1374,23 @@ function setupGsheetSyncControls() {
           const result = await performDirectSync(url);
           btnSyncNow.disabled = false;
           if (syncIcon) syncIcon.textContent = "✅";
-          if (syncMsg) syncMsg.textContent = `Synced ${result.count} rows successfully to Google Sheet!`;
-          updateGsheetStatusUi({ fg_gsheet_url: url, fg_gsheet_last_sync_status: "SUCCESS", fg_gsheet_last_sync_msg: `Synced ${result.count} rows` });
+          if (syncMsg)
+            syncMsg.textContent = `Synced ${result.count} rows successfully to Google Sheet!`;
+          updateGsheetStatusUi({
+            fg_gsheet_url: url,
+            fg_gsheet_last_sync_status: "SUCCESS",
+            fg_gsheet_last_sync_msg: `Synced ${result.count} rows`,
+          });
         } catch (err) {
           btnSyncNow.disabled = false;
           if (syncIcon) syncIcon.textContent = "⚠️";
           const errMsg = err?.message || "Sync failed";
           if (syncMsg) syncMsg.textContent = `Sync failed: ${errMsg}`;
-          updateGsheetStatusUi({ fg_gsheet_url: url, fg_gsheet_last_sync_status: "ERROR", fg_gsheet_last_sync_msg: errMsg });
+          updateGsheetStatusUi({
+            fg_gsheet_url: url,
+            fg_gsheet_last_sync_status: "ERROR",
+            fg_gsheet_last_sync_msg: errMsg,
+          });
         }
 
         setTimeout(() => {
@@ -952,7 +1415,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       "fg_selected_profile",
       "fg_show_after_hours",
       "fg_daily_pnl_history",
-      "fg_profiles_cache"
+      "fg_profiles_cache",
     ]);
 
     if (stored && stored.fg_selected_profile) {
@@ -986,13 +1449,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   } catch (e) {}
 
-  // Trigger end-of-day auto sync check if after market close
+  // Trigger end-of-day auto sync & CSV download check if after market close
   chrome.runtime.sendMessage({ type: "CHECK_END_OF_DAY_SYNC" });
+  chrome.runtime.sendMessage({ type: "CHECK_END_OF_DAY_CSV_DOWNLOAD" });
 
   updateMarketStatusIndicator();
   setInterval(updateMarketStatusIndicator, 1000);
 
-  // Initialize Google Sheet sync & CSV export controls
+  // Initialize Trade Details CSV controls & Google Sheet sync
+  setupTradesExportControls();
   setupGsheetSyncControls();
 
   // Tab Navigation Handling
@@ -1021,8 +1486,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   }
 
-  if (tabBtnPositions) tabBtnPositions.addEventListener("click", () => switchTab("positions"));
-  if (tabBtnDailyPnl) tabBtnDailyPnl.addEventListener("click", () => switchTab("dailyPnl"));
+  if (tabBtnPositions)
+    tabBtnPositions.addEventListener("click", () => switchTab("positions"));
+  if (tabBtnDailyPnl)
+    tabBtnDailyPnl.addEventListener("click", () => switchTab("dailyPnl"));
 
   // Daily P&L User Filter Change
   const selDailyUser = document.getElementById("selDailyUser");
@@ -1033,31 +1500,73 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   }
 
+  // Fetch live profiles directly from API
+  async function fetchLiveProfiles() {
+    const hosts = [
+      "https://fingroww-trading.onrender.com",
+      "http://127.0.0.1:8787",
+    ];
+    for (const host of hosts) {
+      try {
+        const res = await fetch(`${host}/api/paper/profiles`);
+        if (res.ok) {
+          const data = await res.json();
+          const list = Array.isArray(data) ? data : data.profiles || [];
+          if (list && list.length > 0) {
+            cachedProfiles = list;
+            chrome.storage.local.set({ fg_profiles_cache: list });
+            updatePopupUi({ profiles: list, profile: currentProfile });
+            renderDailyPnlView();
+            return list;
+          }
+        }
+      } catch (e) {}
+    }
+  }
+
   // Request fresh sync from background
   chrome.runtime.sendMessage({ type: "FORCE_REFRESH" });
+  fetchLiveProfiles();
 
   // Listen for real-time background sync updates
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === "local") {
       if (changes.fg_show_after_hours !== undefined) {
         const toggleShow = document.getElementById("toggleShowAfterHours");
-        if (toggleShow) toggleShow.checked = changes.fg_show_after_hours.newValue === true;
+        if (toggleShow)
+          toggleShow.checked = changes.fg_show_after_hours.newValue === true;
       }
       if (changes.fg_selected_profile) {
         currentProfile = changes.fg_selected_profile.newValue || currentProfile;
       }
+      if (
+        changes.fg_profiles_cache &&
+        Array.isArray(changes.fg_profiles_cache.newValue)
+      ) {
+        cachedProfiles = changes.fg_profiles_cache.newValue;
+        updatePopupUi({ profiles: cachedProfiles, profile: currentProfile });
+        renderDailyPnlView();
+      }
       if (changes.fg_daily_pnl_history) {
-        cachedDailyHistory = filterRealHistory(changes.fg_daily_pnl_history.newValue);
+        cachedDailyHistory = filterRealHistory(
+          changes.fg_daily_pnl_history.newValue,
+        );
         renderDailyPnlView();
       }
       if (changes.fg_latest_data) {
         updatePopupUi(changes.fg_latest_data.newValue);
         if (changes.fg_latest_data.newValue?.daily_pnl) {
-          cachedDailyHistory = filterRealHistory(changes.fg_latest_data.newValue.daily_pnl);
+          cachedDailyHistory = filterRealHistory(
+            changes.fg_latest_data.newValue.daily_pnl,
+          );
           renderDailyPnlView();
         }
-        if (typeof changes.fg_latest_data.newValue?.is_market_open === "boolean") {
-          updateMarketStatusIndicator(changes.fg_latest_data.newValue.is_market_open);
+        if (
+          typeof changes.fg_latest_data.newValue?.is_market_open === "boolean"
+        ) {
+          updateMarketStatusIndicator(
+            changes.fg_latest_data.newValue.is_market_open,
+          );
         }
       }
     }
@@ -1093,7 +1602,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   const btnLeaderboard = document.getElementById("btnOpenLeaderboard");
   if (btnLeaderboard) {
     btnLeaderboard.addEventListener("click", () => {
-      chrome.tabs.create({ url: "https://fingroww.tech/ai-auto-paper-trading.html#leaderboardSection" });
+      chrome.tabs.create({
+        url: "https://fingroww.tech/ai-auto-paper-trading.html#leaderboardSection",
+      });
     });
   }
 });

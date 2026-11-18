@@ -77,7 +77,22 @@ A high-frequency Chrome extension (Manifest V3) that docks a professional tradin
   - **📤 Sync to Sheet Now**: One-click manual sync for immediate export with live progress feedback and automatic CORS/redirect fallback.
   - **📥 Export CSV**: One-click offline export downloading the complete profile ledger as a `.csv` file.
 
-### 8. Real-Time Synchronization & Stale-While-Revalidate Engine
+### 8. End-of-Day Complete Trade Details CSV Auto-Download (150+ Trades)
+- **Automatic Download at Market Close (3:30 PM IST)**:
+  - At **3:30 PM IST** (Monday through Friday), the extension automatically queries the server for all trade details executed during the day for the selected profile and triggers an immediate automatic CSV file download directly to your computer.
+  - Generates file: `FinGroww_Trades_<Profile>_<YYYY-MM-DD>.csv` (e.g. `FinGroww_Trades_Parth_Gohel_2026-11-18.csv`).
+- **Comprehensive Columns (Zero Truncation even for 150+ or 500+ trades)**:
+  - **Trade Identifiers**: Trade ID, Trader Profile, Symbol, Instrument Name, Instrument Type, Side (BUY/SELL), Status (CLOSED / OPEN).
+  - **Order & Pricing Metrics**: Quantity, Entry Price (₹), Exit / Current Price (₹), Target Price (₹), Stop Loss (₹).
+  - **Profit & Loss Metrics**: Gross P&L (₹), Brokerage / Charges (₹), Net P&L (₹), Return %, Outcome (WIN / LOSS / BREAKEVEN).
+  - **Trade Lifecycle & Exit Reason**: Exit Reason (e.g., `TARGET_HIT`, `STOP_LOSS`, `TRAILING_SL`, `BREAKEVEN_STOP_HIT`, `MANUAL_EXIT`, `OPEN_POSITION`), Entry Time, Exit Time, Holding Duration.
+  - **Advanced Signals & Rationale**: Strategy Name, Trailing Stop State, Slippage (₹), Allocated Margin / Capital (₹), Expiry Date, and Full Signal Rationale.
+- **Manual 1-Click Export Everywhere**:
+  - **Toolbar Popup**: Dedicated `📥 Export Trades CSV` button on the main view and inside Day-to-Day P&L.
+  - **In-Page Bottom Status Bar Drawer**: One-click `📥 Export Trades CSV` button in the drawer header to download instantly from any web page without opening the popup.
+  - **Auto-Download Toggle**: Switch on/off automatic 3:30 PM CSV download at any time in the popup settings.
+
+### 9. Real-Time Synchronization & Stale-While-Revalidate Engine
 - **Fast 3-Second State Polling**: Fetches account metrics, active positions, profiles, and running leaderboards every 3 seconds.
 - **10-Second Live Market Quotes Tick**: Runs `POST /api/paper/session/tick` asynchronously during market hours to recalculate NSE live option/equity quotes on the server.
 - **Stale-While-Revalidate Cache**:
@@ -95,10 +110,11 @@ A high-frequency Chrome extension (Manifest V3) that docks a professional tradin
 | **`Alt + S`** | Toggle minimize/restore between full bottom bar and floating pill |
 | **`—` Button** | Minimize bottom status bar into the floating pill |
 | **`▲` Button** | Toggle detailed positions drawer table & daily P&L |
+| **`📥 Export Trades CSV`** | Fetch and download complete trade-by-trade CSV (profit, loss, exit reason, prices) for selected profile |
 | **`⚡ Open Positions` Tab** | View and exit live sorted open trades |
 | **`📅 Day-to-Day P&L` Tab** | View day-to-day profit & loss history and user analytics |
 | **`📤 Sync to Sheet Now`** | Immediately sync day-to-day ledger to Google Sheet |
-| **`📥 Export CSV`** | Download complete historical trading ledger as a CSV file |
+| **`📥 Daily Ledger`** | Download complete historical daily ledger as a CSV file |
 | **`✕ Exit` Button** | Manually exit that specific open trade immediately |
 | **`↻` Button** | Force immediate live sync & NSE market tick |
 | **`⠿` Drag Handle** | Click & drag the minimized pill to reposition anywhere on the screen |
