@@ -50,28 +50,27 @@ This guide explains how to connect your **Google Sheet** to the FinGroww Trading
 ### How Data Appears in Your Sheet
 - **Every day at 3:30 PM IST (or when you click "Sync to Sheet Now")**:
   - Automatically structures the ledger into distinct **Daily Tables** on `Daily PnL Ledger`.
-  - **Date Table Title Banner**: Every day gets its own table with a full-width header banner displaying the dynamic date & day (e.g. `📅 18 Nov 2026 (Wednesday)`), with an elegant **white background** and bold dark typography.
-  - **No Redundant Date or Day Columns**: Both "Date" and "Day" columns are removed from individual profile rows since both are dynamically integrated into the table title banner.
+  - **Date Table Title Banner**: Every day gets its own table with a full-width header banner displaying the dynamic date & day (e.g. `📅 18 Nov 2026 (Wednesday)`), with a clean **white background** and bold dark typography.
+  - **No Redundant Columns**: "Date", "Day", and "Time (IST)" are removed from profile rows so the table begins directly with **Trader / Profile**.
   - **Blank Row Divider**: A clean blank row separates each day's table.
   - **Zero Duplicates Guarantee**: Concurrency lock (`LockService`) prevents race conditions between multiple sync ticks. Existing days are updated in place.
-  - **12 Table Columns**:
-    1. **Time (IST)** (e.g. `15:30:00`)
-    2. **Trader / Profile** (e.g. `PARTH 18-Nov`)
-    3. **Total P&L (₹)** (Gross / Net P&L before charges)
-    4. **Brokrage (₹)** (Real broker charges & taxes fetched directly per profile from the website card)
-    5. **Total Profit (₹)** (Self-contained dynamic formula: `=C{row}-D{row}`)
-    6. **Realized P&L (₹)** (Real server realized P&L, bold green/red)
-    7. **Unrealized P&L (₹)** (Real server mark-to-market unrealized P&L, bold green/red)
-    8. **Account Equity (₹)**
-    9. **Trades Count**
-    10. **Session Status**
-    11. **Win Rate / Notes**
-    12. **Last Synced At**
+  - **11 Table Columns**:
+    1. **Trader / Profile** (Col A, e.g. `PARTH 18-Nov`)
+    2. **Total P&L (₹)** (Col B)
+    3. **Brokrage (₹)** (Col C, real broker charges from server)
+    4. **Total Profit (₹)** (Col D, dynamic formula: `=B{row}-C{row}`)
+    5. **Realized P&L (₹)** (Col E, real server realized P&L, bold green/red)
+    6. **Unrealized P&L (₹)** (Col F, real server mark-to-market unrealized P&L, bold green/red)
+    7. **Account Equity (₹)** (Col G)
+    8. **Trades Count** (Col H)
+    9. **Session Status** (Col I)
+    10. **Win Rate / Notes** (Col J)
+    11. **Last Synced At** (Col K)
   - **Professional Formatting**:
     - All monetary figures formatted with Indian Rupee symbol `₹`, standard commas, and negative values enclosed in `(₹...)` or red highlight.
     - Alternating clean row backgrounds (`#ffffff` and `#f8fafc`).
     - Session statuses highlighted (Green for `RUNNING`, Red for `STOPPED`, Gray for `PAUSED`).
   - **Live Auto-Calculation while Editing the Sheet**:
-    Whenever you manually change **Total P&L** (Column C) or **Brokrage** (Column D) inside Google Sheets, **Total Profit** (Column E) updates immediately via formula `=C{row}-D{row}` and script trigger `onEdit(e)`.
+    Whenever you manually change **Total P&L** (Column B) or **Brokrage** (Column C) inside Google Sheets, **Total Profit** (Column D) updates immediately via formula `=B{row}-C{row}` and script trigger `onEdit(e)`.
   - **1-Click Table Organizer**:
     Click **FinGroww** $\rightarrow$ **🧹 Clean Duplicates & Reformat All (Daily Tables)** to automatically group any past records into daily tables with dynamic date titles, white backgrounds, and blank row dividers.
