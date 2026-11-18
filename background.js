@@ -95,6 +95,8 @@ function updateDailyPnlRecord(profileName, accountObj, statusVal, activePosition
   const realizedPnl = Number(acc.realized_pnl !== undefined ? acc.realized_pnl : existingRecord.realizedPnl) || 0;
   const unrealizedPnl = Number(acc.unrealized_pnl !== undefined ? acc.unrealized_pnl : existingRecord.unrealizedPnl) || 0;
   const equity = Number(acc.account_equity || acc.equity || existingRecord.equity) || 100000;
+  const charges = Number(acc.total_charges !== undefined ? acc.total_charges : (acc.charges !== undefined ? acc.charges : (existingRecord.charges || 0))) || 0;
+  const slippage = Number(acc.total_slippage !== undefined ? acc.total_slippage : (existingRecord.slippage || 0)) || 0;
 
   // Real trades count resolution from server API:
   let serverTotalTrades = 0;
@@ -153,6 +155,9 @@ function updateDailyPnlRecord(profileName, accountObj, statusVal, activePosition
     displayDate: displayDate,
     dayName: dayName,
     totalPnl: totalPnl,
+    charges: charges,
+    netAfterCharges: totalPnl - charges,
+    slippage: slippage,
     realizedPnl: realizedPnl,
     unrealizedPnl: unrealizedPnl,
     equity: equity,
@@ -269,15 +274,22 @@ async function performMasterSync() {
       profileCaches = stored.fg_profile_caches;
     }
 
+    const syncTargetProfile = currentProfile;
     const previousData = stored?.fg_latest_data;
 
     // 2. Fetch Profiles, Leaderboard, Session State, and Market Status concurrently
     const [profilesData, leaderboardData, sessionData, marketData] = await Promise.all([
       apiFetch("/api/paper/profiles", {}, 10000),
       apiFetch("/api/paper/leaderboard", {}, 10000),
-      apiFetch(`/api/paper/session/state?user=${encodeURIComponent(currentProfile)}`, {}, 14000),
+      apiFetch(`/api/paper/session/state?user=${encodeURIComponent(syncTargetProfile)}`, {}, 14000),
       apiFetch("/api/paper/market-status", {}, 8000)
     ]);
+
+    // If profile was changed while fetch was in-flight, discard stale session data
+    if (syncTargetProfile && currentProfile && syncTargetProfile !== currentProfile) {
+      console.log(`[FinGroww Background] Discarding stale sync for ${syncTargetProfile}, active profile is ${currentProfile}`);
+      return;
+    }
 
     let isMarketOpen = isIndianMarketOpenNow();
     // Only accept backend trading hours if local clock says market is in trading window (backend can flag holidays)
@@ -318,12 +330,39 @@ async function performMasterSync() {
       });
     }
 
+    // Filter strictly RUNNING profiles for ranking competition
+    const runningProfiles = rawLb.filter(p => {
+      const st = (p.status || "").toUpperCase();
+      return st === "RUNNING" || st === "STOPPED_NEW_TRADES";
+    });
+    runningProfiles.sort((a, b) => (Number(b.net_pnl) || 0) - (Number(a.net_pnl) || 0));
+    const runningCount = runningProfiles.length;
+
+    // Lookup table for 1-based rank among RUNNING profiles only
+    const runningRankMap = new Map();
+    runningProfiles.forEach((p, idx) => {
+      const name = p.user_name || p.name;
+      if (name) runningRankMap.set(name, idx + 1);
+    });
+
     let runningLeaderboard = rawLb;
     if (runningLeaderboard.length === 0 && previousData?.leaderboard && previousData.leaderboard.length > 0) {
       runningLeaderboard = previousData.leaderboard;
     }
     runningLeaderboard.sort((a, b) => (Number(b.net_pnl) || 0) - (Number(a.net_pnl) || 0));
-    let leaderboard = runningLeaderboard.map((p, idx) => ({ ...p, rank: idx + 1 }));
+
+    // Map each profile: running profiles get their rank out of runningCount, non-running get null
+    let leaderboard = runningLeaderboard.map((p) => {
+      const name = p.user_name || p.name;
+      const isRunning = runningRankMap.has(name);
+      return {
+        ...p,
+        rank: isRunning ? runningRankMap.get(name) : null,
+        isRunning: isRunning,
+        runningRank: isRunning ? runningRankMap.get(name) : null,
+        totalRunning: runningCount
+      };
+    });
 
     // Session Data & Positions: CRITICAL STALE-WHILE-REVALIDATE PROTECTION
     let activePositions = null;
@@ -406,13 +445,17 @@ async function performMasterSync() {
 
       // Include all profiles with trades or P&L
       if (trades > 0 || pnl !== 0 || realized !== 0) {
+        const profCharges = profileCaches[u]?.account?.total_charges || entry.total_charges || entry.charges || 0;
+        const profSlippage = profileCaches[u]?.account?.total_slippage || entry.total_slippage || entry.slippage || 0;
         updateDailyPnlRecord(
           u,
           {
             total_pnl: pnl,
             realized_pnl: realized,
             unrealized_pnl: entry.unrealized_pnl,
-            account_equity: entry.account_equity || entry.equity
+            account_equity: entry.account_equity || entry.equity,
+            total_charges: profCharges,
+            total_slippage: profSlippage
           },
           entry.status || "IDLE",
           entry.open_positions_count || 0,
@@ -445,6 +488,12 @@ async function performMasterSync() {
         timestamp: Date.now()
       }
     };
+
+    // Final guard: Ensure user has not switched profile while payload was being constructed
+    if (syncTargetProfile && currentProfile && syncTargetProfile !== currentProfile) {
+      console.log(`[FinGroww Background] Discarding stale sync result for ${syncTargetProfile}, active profile changed to ${currentProfile}`);
+      return;
+    }
 
     await chrome.storage.local.set(syncPayload);
 
@@ -811,6 +860,8 @@ async function syncDailyPnlToGoogleSheet(options = {}) {
         if (!dayRecord || !dayRecord.isReal) continue;
 
         const pnl = Number(dayRecord.totalPnl) || 0;
+        const charges = Number(dayRecord.charges !== undefined ? dayRecord.charges : (profileCaches[userName]?.account?.total_charges || 0)) || 0;
+        const netAfterCharges = pnl - charges;
         const realized = Number(dayRecord.realizedPnl) || 0;
         const unrealized = Number(dayRecord.unrealizedPnl) || 0;
         const eq = Number(dayRecord.equity) || 100000;
@@ -833,6 +884,8 @@ async function syncDailyPnlToGoogleSheet(options = {}) {
             time: "15:30:00",
             trader: userName,
             totalPnl: pnl,
+            charges: charges,
+            netAfterCharges: netAfterCharges,
             realizedPnl: realized,
             unrealizedPnl: unrealized,
             equity: eq,
@@ -1043,31 +1096,29 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.type === "SET_PROFILE") {
     const newProfile = request.profile;
-    if (newProfile && newProfile !== currentProfile) {
+    if (newProfile) {
       currentProfile = newProfile;
+      chrome.storage.local.set({ fg_selected_profile: currentProfile });
 
-      // If we have cached older data for this profile, broadcast it IMMEDIATELY so UI doesn't flash empty!
+      // Broadcast switch immediately so UI updates right away
       const cached = profileCaches[currentProfile];
-      if (cached) {
-        chrome.storage.local.get(["fg_latest_data", "fg_profiles_cache"]).then(stored => {
-          const prev = stored?.fg_latest_data || {};
-          chrome.storage.local.set({
-            fg_selected_profile: currentProfile,
-            fg_latest_data: {
-              profile: currentProfile,
-              account: cached.account,
-              positions: cached.positions,
-              status: cached.status,
-              leaderboard: prev.leaderboard || [],
-              profiles: stored.fg_profiles_cache || prev.profiles || [],
-              timestamp: Date.now()
-            }
-          });
+      chrome.storage.local.get(["fg_latest_data", "fg_profiles_cache"]).then(stored => {
+        const prev = stored?.fg_latest_data || {};
+        chrome.storage.local.set({
+          fg_selected_profile: currentProfile,
+          fg_latest_data: {
+            profile: currentProfile,
+            account: cached?.account || {},
+            positions: cached?.positions || [],
+            status: cached?.status || "RUNNING",
+            leaderboard: prev.leaderboard || [],
+            profiles: stored.fg_profiles_cache || prev.profiles || [],
+            timestamp: Date.now()
+          }
         });
-      } else {
-        chrome.storage.local.set({ fg_selected_profile: currentProfile });
-      }
+      });
 
+      isSyncing = false;
       performMasterSync().then(() => {
         triggerLiveMarketTick();
         sendResponse({ success: true, profile: currentProfile });
@@ -1160,6 +1211,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
     const newProfile = changes.fg_selected_profile.newValue;
     if (newProfile && newProfile !== currentProfile) {
       currentProfile = newProfile;
+      isSyncing = false;
       performMasterSync();
       triggerLiveMarketTick();
     }

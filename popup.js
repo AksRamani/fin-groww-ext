@@ -55,19 +55,22 @@ function updatePopupUi(payload) {
 
   const { profile, account, positions, status, leaderboard, profiles } =
     payload;
-  currentProfile = profile || currentProfile;
 
-  if (account && Object.keys(account).length > 0) cachedAccount = account;
   if (leaderboard && Array.isArray(leaderboard) && leaderboard.length > 0)
     cachedLeaderboard = leaderboard;
   if (profiles && Array.isArray(profiles) && profiles.length > 0)
     cachedProfiles = profiles;
+
+  // Reject payloads that belong to a different profile than the currently selected one!
+  if (profile && currentProfile && profile !== currentProfile) {
+    return;
+  }
+
+  if (profile) currentProfile = profile;
+
+  if (account && Object.keys(account).length > 0) cachedAccount = account;
   if (positions && Array.isArray(positions)) {
-    const isSuspectEmpty =
-      positions.length === 0 && (!account || Object.keys(account).length === 0);
-    if (!isSuspectEmpty || cachedPositions.length === 0) {
-      cachedPositions = positions;
-    }
+    cachedPositions = positions;
   }
 
   // 1. Populate Profile Selector (Merge all real profiles from server)
@@ -104,33 +107,46 @@ function updatePopupUi(payload) {
     }
   }
 
-  // 2. Leaderboard Rank among Profiles
+  // 2. Leaderboard Rank among Running Profiles Only
   const rankVal = document.getElementById("rankVal");
   const rankBadge = document.getElementById("rankBadge");
   const lb = cachedLeaderboard || [];
-  const total = lb.length;
-  const entry = lb.find((p) => p.user_name === currentProfile);
 
-  if (entry && entry.rank) {
-    const r = entry.rank;
-    rankVal.textContent = `Rank #${r} of ${total} Profiles`;
-    rankBadge.className = "rank-badge" + (r === 1 ? " top-1" : "");
-  } else {
-    const idx = lb.findIndex((p) => p.user_name === currentProfile);
-    if (idx !== -1) {
-      const r = idx + 1;
-      rankVal.textContent = `Rank #${r} of ${total} Profiles`;
-      rankBadge.className = "rank-badge" + (r === 1 ? " top-1" : "");
+  // Filter running profiles only
+  const runningList = lb.filter(p => {
+    const st = (p.status || "").toUpperCase();
+    return st === "RUNNING" || st === "STOPPED_NEW_TRADES";
+  });
+  const totalRunning = runningList.length || 6;
+
+  const entry = lb.find((p) => (p.user_name || p.name) === currentProfile);
+  const isRunning = entry && ((entry.status || "").toUpperCase() === "RUNNING" || (entry.status || "").toUpperCase() === "STOPPED_NEW_TRADES");
+
+  let r = null;
+  if (isRunning) {
+    if (entry.rank) {
+      r = entry.rank;
     } else {
-      rankVal.textContent = `Rank -- of ${total || "--"} Profiles`;
-      rankBadge.className = "rank-badge";
+      const idx = runningList.findIndex((p) => (p.user_name || p.name) === currentProfile);
+      if (idx !== -1) r = idx + 1;
     }
+  }
+
+  if (isRunning && r) {
+    rankVal.textContent = `Rank #${r} of ${totalRunning} Running`;
+    rankBadge.className = "rank-badge" + (Number(r) === 1 ? " top-1" : "");
+    rankBadge.title = `${currentProfile} is Rank #${r} out of ${totalRunning} active running profiles`;
+  } else {
+    const st = entry?.status || "NOT RUNNING";
+    rankVal.textContent = `Rank -- of ${totalRunning} Running`;
+    rankBadge.className = "rank-badge";
+    rankBadge.title = `${currentProfile} is ${st} (not in running competition)`;
   }
 
   // 3. Overall Net P&L & Virtual Equity
   const acc = cachedAccount || {};
-  const totalPnl = Number(acc.total_pnl) || 0;
-  const retPct = Number(acc.overall_return_pct) || 0;
+  const totalPnl = Number(acc.total_pnl !== undefined ? acc.total_pnl : (entry?.net_pnl !== undefined ? entry.net_pnl : (entry?.total_pnl !== undefined ? entry.total_pnl : 0))) || 0;
+  const retPct = Number(acc.overall_return_pct !== undefined ? acc.overall_return_pct : (entry?.roi_pct !== undefined ? entry.roi_pct : 0)) || 0;
   const pnlEl = document.getElementById("totalPnl");
   const retEl = document.getElementById("returnPct");
 
@@ -138,15 +154,22 @@ function updatePopupUi(payload) {
   pnlEl.className =
     "kpi-val " + (totalPnl > 0 ? "val-green" : totalPnl < 0 ? "val-red" : "");
 
-  retEl.textContent = `${retPct >= 0 ? "+" : ""}${retPct.toFixed(2)}% Overall Return`;
+  const charges = Number(acc.total_charges || acc.charges || 0);
+  const netAfterCharges = totalPnl - charges;
+
+  if (charges > 0) {
+    retEl.innerHTML = `${retPct >= 0 ? "+" : ""}${retPct.toFixed(2)}% Return • <span style="color:var(--accent-gold);" title="Charges & Taxes from broker">Charges: ₹${charges.toFixed(2)}</span> • <span title="Net P&L after deducting charges">Net: ${netAfterCharges >= 0 ? "+" : ""}${formatInr(netAfterCharges)}</span>`;
+  } else {
+    retEl.textContent = `${retPct >= 0 ? "+" : ""}${retPct.toFixed(2)}% Overall Return`;
+  }
   retEl.style.color =
     retPct > 0 ? "var(--green)" : retPct < 0 ? "var(--red)" : "var(--text-dim)";
 
   document.getElementById("accountEquity").textContent = formatInr(
-    acc.account_equity || 100000,
+    acc.account_equity || entry?.equity || entry?.account_equity || 100000,
   );
   document.getElementById("availableBal").textContent =
-    `Balance: ${formatInr(acc.available_balance || 0)}`;
+    `Balance: ${formatInr(acc.available_balance || (entry?.equity || entry?.account_equity || 100000) - (acc.used_margin || 0))}`;
 
   // Update Trade Details CSV badge
   const tradesBadge = document.getElementById("tradesExportCountBadge");
@@ -365,6 +388,7 @@ function computeDailyPnlSummary(historyByUser, targetUser) {
             displayDate: dayData.displayDate || dateKey,
             dayName: dayData.dayName || "",
             totalPnl: 0,
+            charges: 0,
             realizedPnl: 0,
             unrealizedPnl: 0,
             tradesCount: 0,
@@ -377,7 +401,9 @@ function computeDailyPnlSummary(historyByUser, targetUser) {
           };
         }
 
+        const dayCharges = Number(dayData.charges) || 0;
         dateMap[dateKey].totalPnl += pnl;
+        dateMap[dateKey].charges += dayCharges;
         dateMap[dateKey].realizedPnl += realized;
         dateMap[dateKey].unrealizedPnl += Number(dayData.unrealizedPnl) || 0;
         dateMap[dateKey].tradesCount += trades;
@@ -392,6 +418,8 @@ function computeDailyPnlSummary(historyByUser, targetUser) {
         dateMap[dateKey].userBreakdown.push({
           user: user,
           pnl: pnl,
+          charges: dayCharges,
+          netAfterCharges: pnl - dayCharges,
           tradesCount: trades,
           winningTrades: Number(dayData.winningTrades) || 0,
           losingTrades: Number(dayData.losingTrades) || 0,
@@ -697,13 +725,17 @@ function renderDailyPnlView() {
             <span class="chip-label">TRADES</span>
             <span class="chip-val">${trades}</span>
           </div>
-          <div class="metric-chip" title="Winning trades">
-            <span class="chip-label">WIN</span>
-            <span class="chip-val val-win">${wins}</span>
+          <div class="metric-chip" title="Charges & Taxes (from website/server)">
+            <span class="chip-label">CHARGES</span>
+            <span class="chip-val" style="color:var(--accent-gold);">₹${(Number(r.charges) || 0).toFixed(2)}</span>
           </div>
-          <div class="metric-chip" title="Losing trades">
-            <span class="chip-label">LOSS</span>
-            <span class="chip-val val-loss">${losses}</span>
+          <div class="metric-chip" title="Net Total after Charges & Taxes (Total P&L - Charges)">
+            <span class="chip-label">NET AFTER</span>
+            <span class="chip-val ${(pnl - (Number(r.charges) || 0)) >= 0 ? "val-win" : "val-loss"}">${(pnl - (Number(r.charges) || 0)) >= 0 ? "+" : ""}₹${(pnl - (Number(r.charges) || 0)).toFixed(2)}</span>
+          </div>
+          <div class="metric-chip" title="Winning / Losing trades">
+            <span class="chip-label">W / L</span>
+            <span class="chip-val"><span class="val-win">${wins}W</span>/<span class="val-loss">${losses}L</span></span>
           </div>
           <div class="metric-chip" title="Session win rate percentage">
             <span class="chip-label">WIN RATE</span>
@@ -740,6 +772,8 @@ function exportDailyPnlToCsv() {
       "Time (IST)",
       "Trader / Profile",
       "Total P&L (INR)",
+      "Charges & Taxes (INR)",
+      "Net Total after Charges (INR)",
       "Realized P&L (INR)",
       "Unrealized P&L (INR)",
       "Account Equity (INR)",
@@ -755,6 +789,8 @@ function exportDailyPnlToCsv() {
       if (!dayRecord || dayRecord.isReal === false) continue;
 
       const pnl = Number(dayRecord.totalPnl) || 0;
+      const charges = Number(dayRecord.charges !== undefined ? dayRecord.charges : (cachedAccount?.total_charges || 0)) || 0;
+      const netAfterCharges = pnl - charges;
       const realized = Number(dayRecord.realizedPnl) || 0;
       const unrealized = Number(dayRecord.unrealizedPnl) || 0;
       const eq = Number(dayRecord.equity) || 100000;
@@ -779,6 +815,8 @@ function exportDailyPnlToCsv() {
           `"15:30:00"`,
           `"${userName}"`,
           pnl.toFixed(2),
+          charges.toFixed(2),
+          netAfterCharges.toFixed(2),
           realized.toFixed(2),
           unrealized.toFixed(2),
           eq.toFixed(2),
@@ -1263,6 +1301,8 @@ function setupGsheetSyncControls() {
         if (!dayRecord || dayRecord.isReal === false) continue;
 
         const pnl = Number(dayRecord.totalPnl) || 0;
+        const charges = Number(dayRecord.charges !== undefined ? dayRecord.charges : (cachedAccount?.total_charges || 0)) || 0;
+        const netAfterCharges = pnl - charges;
         const realized = Number(dayRecord.realizedPnl) || 0;
         const unrealized = Number(dayRecord.unrealizedPnl) || 0;
         const eq = Number(dayRecord.equity) || 100000;
@@ -1287,6 +1327,8 @@ function setupGsheetSyncControls() {
             time: "15:30:00",
             trader: userName,
             totalPnl: pnl,
+            charges: charges,
+            netAfterCharges: netAfterCharges,
             realizedPnl: realized,
             unrealizedPnl: unrealized,
             equity: eq,
@@ -1524,6 +1566,36 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   }
 
+  // Directly fetch session data for selected profile from server
+  async function fetchAndApplyProfileSession(profileName) {
+    if (!profileName) return;
+    const hosts = [
+      "https://fingroww-trading.onrender.com",
+      "http://127.0.0.1:8787",
+    ];
+    for (const host of hosts) {
+      try {
+        const res = await fetch(
+          `${host}/api/paper/session/state?user=${encodeURIComponent(profileName)}`
+        );
+        if (res.ok) {
+          const data = await res.json();
+          if (currentProfile === profileName) {
+            updatePopupUi({
+              profile: profileName,
+              account: data.account || {},
+              positions: data.active_positions || [],
+              status: data.status || "RUNNING",
+              leaderboard: cachedLeaderboard,
+              profiles: cachedProfiles,
+            });
+            return;
+          }
+        }
+      } catch (e) {}
+    }
+  }
+
   // Request fresh sync from background
   chrome.runtime.sendMessage({ type: "FORCE_REFRESH" });
   fetchLiveProfiles();
@@ -1537,7 +1609,15 @@ document.addEventListener("DOMContentLoaded", async () => {
           toggleShow.checked = changes.fg_show_after_hours.newValue === true;
       }
       if (changes.fg_selected_profile) {
-        currentProfile = changes.fg_selected_profile.newValue || currentProfile;
+        const newProf = changes.fg_selected_profile.newValue;
+        if (newProf && newProf !== currentProfile) {
+          currentProfile = newProf;
+          const selProf = document.getElementById("selProfile");
+          if (selProf && selProf.value !== currentProfile) {
+            selProf.value = currentProfile;
+          }
+          fetchAndApplyProfileSession(currentProfile);
+        }
       }
       if (
         changes.fg_profiles_cache &&
@@ -1579,7 +1659,22 @@ document.addEventListener("DOMContentLoaded", async () => {
       const selected = e.target.value;
       if (selected && selected !== currentProfile) {
         currentProfile = selected;
+        cachedAccount = {};
+        cachedPositions = [];
+
+        // Visual feedback
+        const rankVal = document.getElementById("rankVal");
+        if (rankVal) rankVal.textContent = "Loading profile...";
+        const pnlVal = document.getElementById("totalPnl");
+        if (pnlVal) pnlVal.textContent = "₹...";
+        const posBody = document.getElementById("positionsTableBody");
+        if (posBody) {
+          posBody.innerHTML = `<tr><td colspan="7" class="empty-state">Loading active positions for <strong>${selected}</strong>...</td></tr>`;
+        }
+
+        chrome.storage.local.set({ fg_selected_profile: selected });
         chrome.runtime.sendMessage({ type: "SET_PROFILE", profile: selected });
+        fetchAndApplyProfileSession(selected);
       }
     });
   }

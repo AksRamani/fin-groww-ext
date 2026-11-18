@@ -1362,8 +1362,17 @@
     const onProfileChange = (selected) => {
       if (selected && selected !== currentProfile) {
         currentProfile = selected;
+        activePositions = [];
+        accountData = {};
+        chrome.storage.local.set({ fg_selected_profile: selected });
         chrome.runtime.sendMessage({ type: "SET_PROFILE", profile: selected });
+        syncWebsiteWithExtension(selected);
+        renderProfileSelectors();
+        renderAccountMetrics();
+        renderRank();
+        renderPositionsTicker({});
         showToast(`Switched profile to [${selected}]`);
+        fetchAndApplyProfileSession(selected);
       }
     };
 
@@ -1652,21 +1661,36 @@
     });
   }
 
+  // Directly fetch session data for selected profile from server
+  async function fetchAndApplyProfileSession(profileName) {
+    if (!profileName) return;
+    const hosts = ["https://fingroww-trading.onrender.com", "http://127.0.0.1:8787"];
+    for (const host of hosts) {
+      try {
+        const res = await fetch(`${host}/api/paper/session/state?user=${encodeURIComponent(profileName)}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (currentProfile === profileName) {
+            applyLatestData({
+              profile: profileName,
+              account: data.account || {},
+              positions: data.active_positions || [],
+              status: data.status || "RUNNING",
+              leaderboard: leaderboardData,
+              profiles: profilesList
+            });
+            return;
+          }
+        }
+      } catch (e) {}
+    }
+  }
+
   // Update UI with real-time data received from background sync (Stale-While-Revalidate)
   function applyLatestData(payload) {
     if (!payload || !shadowRoot) return;
 
     const { profile, account, positions, status, leaderboard, profiles } = payload;
-    if (profile) currentProfile = profile;
-
-    if (payload.daily_pnl_history) {
-      cachedDailyHistory = payload.daily_pnl_history;
-    }
-
-    // Retain older account metrics if incoming is empty/undefined
-    if (account && Object.keys(account).length > 0) {
-      accountData = account;
-    }
 
     // Retain older leaderboard if incoming is empty/undefined
     if (leaderboard && Array.isArray(leaderboard) && leaderboard.length > 0) {
@@ -1676,6 +1700,21 @@
     // Retain older profiles list if incoming is empty/undefined
     if (profiles && Array.isArray(profiles) && profiles.length > 0) {
       profilesList = profiles;
+    }
+
+    if (payload.daily_pnl_history) {
+      cachedDailyHistory = payload.daily_pnl_history;
+    }
+
+    // Reject payloads that belong to a different profile than the currently selected one!
+    if (profile && currentProfile && profile !== currentProfile) {
+      return;
+    }
+
+    if (profile) currentProfile = profile;
+
+    if (account && (Object.keys(account).length > 0 || profile === currentProfile)) {
+      accountData = account;
     }
 
     // Positions: Only update if valid. Never wipe older positions with a blank/glitched payload!
@@ -1815,8 +1854,9 @@
     const engineText = shadowRoot.getElementById("fg-engine-status-text");
     const restorePnl = shadowRoot.getElementById("fg-restore-pnl");
 
-    const totalPnl = Number(accountData.total_pnl) || 0;
-    const retPct = Number(accountData.overall_return_pct) || 0;
+    const entry = (leaderboardData || []).find((p) => (p.user_name || p.name) === currentProfile);
+    const totalPnl = Number(accountData?.total_pnl !== undefined ? accountData.total_pnl : (entry?.net_pnl !== undefined ? entry.net_pnl : (entry?.total_pnl !== undefined ? entry.total_pnl : 0))) || 0;
+    const retPct = Number(accountData?.overall_return_pct !== undefined ? accountData.overall_return_pct : (entry?.roi_pct !== undefined ? entry.roi_pct : 0)) || 0;
 
     pnlVal.textContent = `P&L: ${formatInr(totalPnl)}`;
     pnlPct.textContent = `(${formatPct(retPct)})`;
@@ -1960,25 +2000,36 @@
     const rankText = shadowRoot.getElementById("fg-rank-text");
     const drawerRank = shadowRoot.getElementById("fg-drawer-rank");
 
-    const total = leaderboardData.length || 6;
-    const entry = leaderboardData.find((p) => p.user_name === currentProfile);
-    let r = "--";
+    const runningList = (leaderboardData || []).filter(p => {
+      const st = (p.status || "").toUpperCase();
+      return st === "RUNNING" || st === "STOPPED_NEW_TRADES";
+    });
+    const totalRunning = runningList.length || 6;
 
-    if (entry && entry.rank) {
-      r = entry.rank;
-    } else {
-      const idx = leaderboardData.findIndex((p) => p.user_name === currentProfile);
-      if (idx !== -1) {
-        r = idx + 1;
+    const entry = (leaderboardData || []).find((p) => (p.user_name || p.name) === currentProfile);
+    const isRunning = entry && ((entry.status || "").toUpperCase() === "RUNNING" || (entry.status || "").toUpperCase() === "STOPPED_NEW_TRADES");
+
+    let r = "--";
+    if (isRunning) {
+      if (entry.rank) {
+        r = entry.rank;
+      } else {
+        const idx = runningList.findIndex((p) => (p.user_name || p.name) === currentProfile);
+        if (idx !== -1) r = idx + 1;
       }
     }
 
-    const rankStr = `Rank #${r} of ${total} Running`;
+    const rankStr = isRunning && r !== "--"
+      ? `Rank #${r} of ${totalRunning} Running`
+      : `Rank -- of ${totalRunning} Running`;
+
     if (rankText) rankText.textContent = rankStr;
     if (drawerRank) drawerRank.textContent = `🏆 ${rankStr}`;
     if (rankBadge) {
       rankBadge.className = "fg-rank-badge" + (Number(r) === 1 ? " top-1" : "");
-      rankBadge.title = `${currentProfile} is ranked #${r} out of ${total} active running profiles`;
+      rankBadge.title = isRunning && r !== "--"
+        ? `${currentProfile} is ranked #${r} out of ${totalRunning} active running profiles`
+        : `${currentProfile} is ${entry?.status || "NOT RUNNING"} (out of ${totalRunning} running profiles)`;
     }
   }
 
@@ -1987,13 +2038,33 @@
     const rankEl = shadowRoot.getElementById("fg-drawer-rank");
     const equityEl = shadowRoot.getElementById("fg-drawer-equity");
 
-    const total = leaderboardData.length || 6;
-    const entry = leaderboardData.find((p) => p.user_name === currentProfile);
-    const r = entry?.rank || (leaderboardData.findIndex((p) => p.user_name === currentProfile) + 1) || "--";
-    if (rankEl) rankEl.textContent = `🏆 Rank #${r} of ${total}`;
+    const runningList = (leaderboardData || []).filter(p => {
+      const st = (p.status || "").toUpperCase();
+      return st === "RUNNING" || st === "STOPPED_NEW_TRADES";
+    });
+    const totalRunning = runningList.length || 6;
+
+    const entry = (leaderboardData || []).find((p) => (p.user_name || p.name) === currentProfile);
+    const isRunning = entry && ((entry.status || "").toUpperCase() === "RUNNING" || (entry.status || "").toUpperCase() === "STOPPED_NEW_TRADES");
+    let r = "--";
+    if (isRunning) {
+      if (entry.rank) {
+        r = entry.rank;
+      } else {
+        const idx = runningList.findIndex((p) => (p.user_name || p.name) === currentProfile);
+        if (idx !== -1) r = idx + 1;
+      }
+    }
+
+    if (rankEl) {
+      rankEl.textContent = isRunning && r !== "--" ? `🏆 Rank #${r} of ${totalRunning} Running` : `🏆 Rank -- of ${totalRunning} Running`;
+    }
 
     const eq = Number(accountData.account_equity) || 100000;
-    if (equityEl) equityEl.textContent = `💰 Equity: ${formatInr(eq)}`;
+    const chg = Number(accountData.total_charges) || 0;
+    if (equityEl) {
+      equityEl.textContent = chg > 0 ? `💰 Equity: ${formatInr(eq)} • Charges: ₹${chg.toFixed(2)}` : `💰 Equity: ${formatInr(eq)}`;
+    }
   }
 
   // Render Detailed Drawer Table with Green/Red styling, Percentage, and Exit Buttons
@@ -2108,6 +2179,7 @@
               displayDate: dayData.displayDate || dateKey,
               dayName: dayData.dayName || "",
               totalPnl: 0,
+              charges: 0,
               realizedPnl: 0,
               unrealizedPnl: 0,
               tradesCount: 0,
@@ -2120,7 +2192,9 @@
             };
           }
 
+          const dayCharges = Number(dayData.charges) || 0;
           dateMap[dateKey].totalPnl += pnl;
+          dateMap[dateKey].charges += dayCharges;
           dateMap[dateKey].realizedPnl += realized;
           dateMap[dateKey].unrealizedPnl += Number(dayData.unrealizedPnl) || 0;
           dateMap[dateKey].tradesCount += trades;
@@ -2134,6 +2208,8 @@
           dateMap[dateKey].userBreakdown.push({
             user: user,
             pnl: pnl,
+            charges: dayCharges,
+            netAfterCharges: pnl - dayCharges,
             tradesCount: trades,
             winningTrades: Number(dayData.winningTrades) || 0,
             losingTrades: Number(dayData.losingTrades) || 0,
@@ -2359,13 +2435,17 @@
                   <span class="fg-chip-label">TRADES</span>
                   <span class="fg-chip-val">${trades}</span>
                 </div>
-                <div class="fg-metric-chip" title="Winning trades">
-                  <span class="fg-chip-label">WIN</span>
-                  <span class="fg-chip-val val-win">${wins}</span>
+                <div class="fg-metric-chip" title="Charges & Taxes (from website/broker)">
+                  <span class="fg-chip-label">CHARGES</span>
+                  <span class="fg-chip-val" style="color:#fbbf24;">₹${(Number(r.charges) || 0).toFixed(2)}</span>
                 </div>
-                <div class="fg-metric-chip" title="Losing trades">
-                  <span class="fg-chip-label">LOSS</span>
-                  <span class="fg-chip-val val-loss">${losses}</span>
+                <div class="fg-metric-chip" title="Net Total after Charges & Taxes (Total P&L - Charges)">
+                  <span class="fg-chip-label">NET AFTER</span>
+                  <span class="fg-chip-val ${(pnl - (Number(r.charges) || 0)) >= 0 ? "val-win" : "val-loss"}">${(pnl - (Number(r.charges) || 0)) >= 0 ? "+" : ""}₹${(pnl - (Number(r.charges) || 0)).toFixed(2)}</span>
+                </div>
+                <div class="fg-metric-chip" title="Winning / Losing trades">
+                  <span class="fg-chip-label">W / L</span>
+                  <span class="fg-chip-val"><span class="val-win">${wins}W</span>/<span class="val-loss">${losses}L</span></span>
                 </div>
                 <div class="fg-metric-chip" title="Session win rate percentage">
                   <span class="fg-chip-label">WIN RATE</span>
@@ -2431,8 +2511,18 @@
         updateMarketVisibility();
       }
       if (changes.fg_selected_profile) {
-        currentProfile = changes.fg_selected_profile.newValue || currentProfile;
-        renderProfileSelectors();
+        const newProf = changes.fg_selected_profile.newValue;
+        if (newProf && newProf !== currentProfile) {
+          currentProfile = newProf;
+          activePositions = [];
+          accountData = {};
+          syncWebsiteWithExtension(currentProfile);
+          renderProfileSelectors();
+          renderAccountMetrics();
+          renderRank();
+          renderPositionsTicker({});
+          fetchAndApplyProfileSession(currentProfile);
+        }
       }
       if (changes.fg_profiles_cache && Array.isArray(changes.fg_profiles_cache.newValue)) {
         profilesList = changes.fg_profiles_cache.newValue;
@@ -2448,21 +2538,21 @@
     }
   });
 
-  // Specifically on fingroww.tech: sync when website changes user
+  // Sync website dropdown and localStorage to match the profile chosen in the extension
+  function syncWebsiteWithExtension(newProfile) {
+    if (!window.location.hostname.includes("fingroww.tech") || !newProfile) return;
+    try {
+      localStorage.setItem("fingroww_paper_user", newProfile);
+      const sel = document.getElementById("selUserProfile");
+      if (sel && sel.value !== newProfile) {
+        sel.value = newProfile;
+      }
+    } catch (e) {}
+  }
+
+  // Specifically on fingroww.tech: listen ONLY when user explicitly changes dropdown on the web page
   function hookWebsiteProfileChange() {
     if (!window.location.hostname.includes("fingroww.tech")) return;
-
-    const checkWebUser = () => {
-      try {
-        const webUser = localStorage.getItem("fingroww_paper_user");
-        if (webUser && webUser !== currentProfile) {
-          currentProfile = webUser;
-          chrome.runtime.sendMessage({ type: "SET_PROFILE", profile: webUser });
-        }
-      } catch (e) {}
-    };
-
-    setInterval(checkWebUser, 1500);
 
     const sel = document.getElementById("selUserProfile");
     if (sel) {
@@ -2470,6 +2560,7 @@
         const val = e.target.value;
         if (val && val !== currentProfile) {
           currentProfile = val;
+          chrome.storage.local.set({ fg_selected_profile: val });
           chrome.runtime.sendMessage({ type: "SET_PROFILE", profile: val });
         }
       });
@@ -2555,6 +2646,7 @@
 
       if (stored.fg_selected_profile) {
         currentProfile = stored.fg_selected_profile;
+        syncWebsiteWithExtension(currentProfile);
       }
       if (stored.fg_latest_data) {
         applyLatestData(stored.fg_latest_data);
