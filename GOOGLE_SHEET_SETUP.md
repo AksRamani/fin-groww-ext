@@ -49,32 +49,30 @@ This guide explains how to connect your **Google Sheet** to the FinGroww Trading
 
 ### How Data Appears in Your Sheet
 - **Every day at 3:30 PM IST (or when you click "Sync to Sheet Now")**:
-  - Automatically appends today's real trading ledger to the sheet named `Daily PnL Ledger`.
-  - Strictly **Profile-by-Profile** (no aggregated combined row).
-  - Only records profiles that made trades or booked profit/loss today (100% real server data).
-  - **Zero Duplicates Guarantee**:
-    - Concurrency lock (`LockService`) prevents race conditions between multiple sync ticks.
-    - Canonical date & trader normalization matches existing rows regardless of date formatting.
-    - If a day's row already exists, it updates that exact row in place.
-  - **14 Ledger Columns**:
-    1. **Date** (e.g. `18 Nov 2026`)
-    2. **Day** (e.g. `Wed`)
-    3. **Time (IST)** (e.g. `15:30:00`)
-    4. **Trader / Profile** (e.g. `PARTH 18-Nov`)
-    5. **Total P&L (₹)** (Gross / Net P&L before charges)
-    6. **Brokrage (₹)** (Real broker charges & taxes fetched directly per profile from the website card)
-    7. **Total Profit (₹)** (Self-contained dynamic formula: `=E{row}-F{row}`)
-    8. **Realized P&L (₹)**
-    9. **Unrealized P&L (₹)**
-    10. **Account Equity (₹)**
-    11. **Trades Count**
-    12. **Session Status**
-    13. **Win Rate / Notes**
-    14. **Last Synced At**
+  - Automatically structures the ledger into distinct **Daily Tables** on `Daily PnL Ledger`.
+  - **Date Table Title Banner**: Every day gets its own table with a full-width header banner displaying the date & day (e.g. `📅 18 Nov 2026 (Wednesday)`).
+  - **No Redundant Date Column**: The redundant "Date" column is removed from individual rows since the table itself is titled with the date.
+  - **Blank Row Divider**: A clean blank row separates each day's table.
+  - **Zero Duplicates Guarantee**: Concurrency lock (`LockService`) prevents race conditions between multiple sync ticks. Existing days are updated in place.
+  - **13 Table Columns**:
+    1. **Day** (e.g. `Wed`)
+    2. **Time (IST)** (e.g. `15:30:00`)
+    3. **Trader / Profile** (e.g. `PARTH 18-Nov`)
+    4. **Total P&L (₹)** (Gross / Net P&L before charges)
+    5. **Brokrage (₹)** (Real broker charges & taxes fetched directly per profile from the website card)
+    6. **Total Profit (₹)** (Self-contained dynamic formula: `=D{row}-E{row}`)
+    7. **Realized P&L (₹)** (Real server realized P&L, bold green/red)
+    8. **Unrealized P&L (₹)** (Real server mark-to-market unrealized P&L, bold green/red)
+    9. **Account Equity (₹)**
+    10. **Trades Count**
+    11. **Session Status**
+    12. **Win Rate / Notes**
+    13. **Last Synced At**
   - **Professional Formatting**:
     - All monetary figures formatted with Indian Rupee symbol `₹`, standard commas, and negative values enclosed in `(₹...)` or red highlight.
     - Alternating clean row backgrounds (`#ffffff` and `#f8fafc`).
     - Session statuses highlighted (Green for `RUNNING`, Red for `STOPPED`, Gray for `PAUSED`).
   - **Live Auto-Calculation while Editing the Sheet**:
-    Whenever you manually change **Total P&L** (Column E) or **Brokrage** (Column F) inside Google Sheets, **Total Profit** (Column G) updates immediately via formula and script trigger `onEdit(e)`.
-  - **Auto-Migration**: If you already have an existing sheet with older 12 columns, the script automatically inserts the two new columns and calculates formulas without losing past data.
+    Whenever you manually change **Total P&L** (Column D) or **Brokrage** (Column E) inside Google Sheets, **Total Profit** (Column F) updates immediately via formula `=D{row}-E{row}` and script trigger `onEdit(e)`.
+  - **1-Click Table Organizer**:
+    Click **FinGroww** $\rightarrow$ **🧹 Clean Duplicates & Reformat All (Daily Tables)** to automatically group any past records into daily tables with date titles and blank row dividers.
