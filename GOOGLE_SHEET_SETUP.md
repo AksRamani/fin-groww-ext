@@ -51,8 +51,8 @@ This guide explains how to connect your **Google Sheet** to the FinGroww Trading
     3. **Time (IST)** (e.g. `15:30:00`)
     4. **Trader / Profile** (e.g. `PARTH 18-Nov`)
     5. **Total P&L (₹)** (Gross / Net P&L before charges)
-    6. **Charges & Taxes (₹)** (Real broker charges & taxes fetched directly per profile from the website card)
-    7. **Net Total after Charges & Taxes (₹)** (Dynamic formula: `=E{row}-F{row}`)
+    6. **Brokrage (₹)** (Real broker charges & taxes fetched directly per profile from the website card)
+    7. **Total Profit (₹)** (Dynamic formula: `=E{row}-F{row}`)
     8. **Realized P&L (₹)**
     9. **Unrealized P&L (₹)**
     10. **Account Equity (₹)**
@@ -61,6 +61,6 @@ This guide explains how to connect your **Google Sheet** to the FinGroww Trading
     13. **Win Rate / Notes**
     14. **Last Synced At**
   - **Live Auto-Calculation while Editing the Sheet**:
-    Whenever you manually change **Total P&L** (Column E) or **Charges & Taxes** (Column F) inside Google Sheets, the **Net Total after Charges & Taxes** (Column G) updates immediately via formula and script trigger `onEdit(e)`.
+    Whenever you manually change **Total P&L** (Column E) or **Brokrage** (Column F) inside Google Sheets, **Total Profit** (Column G) updates immediately via formula and script trigger `onEdit(e)`.
   - **Zero Duplicates**: If synced more than once on the same date, it updates that day's existing rows instead of creating duplicates.
   - **Auto-Migration**: If you already have an existing sheet with 12 columns, the script automatically inserts the two new columns and calculates formulas without losing past data.

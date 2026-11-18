@@ -75,8 +75,8 @@ A high-frequency Chrome extension (Manifest V3) that docks a professional tradin
   3. **Time (IST)** (e.g. `15:30:00`)
   4. **Trader / Profile** (e.g. `PARTH 18-Nov`)
   5. **Total P&L (₹)** (Gross / Net P&L before charges)
-  6. **Charges & Taxes (₹)** (Real broker charges & taxes fetched directly per profile from the website card)
-  7. **Net Total after Charges & Taxes (₹)** (Dynamic formula: `=E{row}-F{row}`)
+  6. **Brokrage (₹)** (Real broker charges & taxes fetched directly per profile from the website card)
+  7. **Total Profit (₹)** (Dynamic formula: `=E{row}-F{row}`)
   8. **Realized P&L (₹)**
   9. **Unrealized P&L (₹)**
   10. **Account Equity (₹)**
@@ -85,7 +85,7 @@ A high-frequency Chrome extension (Manifest V3) that docks a professional tradin
   13. **Win Rate / Notes**
   14. **Last Synced At**
 - **Live Auto-Calculation while Editing the Sheet**:
-  - Whenever you manually edit **Total P&L** (Column E) or **Charges & Taxes** (Column F) inside Google Sheets, **Column G** (`Net Total after Charges & Taxes`) updates automatically via formula and Apps Script trigger `onEdit(e)`.
+  - Whenever you manually edit **Total P&L** (Column E) or **Brokrage** (Column F) inside Google Sheets, **Column G** (`Total Profit`) updates automatically via formula and Apps Script trigger `onEdit(e)`.
   - Color-codes positive net total in bold green and losses in bold red.
   - **Auto-Migration of Existing Sheets**: Existing sheets with 12 columns automatically have the 2 new columns inserted and formulas generated without losing prior rows.
   - **Smart Upsert (Zero Duplicates)**: If synced more than once on the same day, the Google Apps Script updates existing rows in place rather than creating duplicate entries.

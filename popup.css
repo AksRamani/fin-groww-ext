@@ -249,12 +249,65 @@ body {
   background: var(--text-dim);
 }
 
-/* KPI Overview Grid */
+/* KPI Overview Section */
+.kpi-section {
+  padding: 10px 14px 6px 14px;
+}
+
 .kpi-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
-  padding: 12px 14px;
+  margin-bottom: 8px;
+}
+
+/* Professional Financial Breakdown Strip (Brokerage & Total Profit) */
+.kpi-financial-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 8px 14px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.financial-strip-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  text-align: center;
+}
+
+.strip-label {
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 3px;
+}
+
+.strip-value {
+  font-family: var(--font-mono);
+  font-size: 13.5px;
+  font-weight: 800;
+  letter-spacing: -0.2px;
+  color: var(--text-main);
+  white-space: nowrap;
+}
+
+.val-gold {
+  color: #fbbf24 !important;
+}
+
+.financial-strip-divider {
+  width: 1px;
+  height: 24px;
+  background: rgba(255, 255, 255, 0.1);
+  margin: 0 12px;
 }
 
 .kpi-card {
@@ -899,16 +952,16 @@ input:checked + .slider:before {
   color: var(--text-dim);
 }
 
-/* Modern Segmented Metrics Grid for Zero Wrapping */
+/* Modern Segmented Metrics Grid for Zero Wrapping (3x2 Balanced Layout) */
 .daily-metrics-bar {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 4px;
-  background: rgba(13, 17, 23, 0.7);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 6px;
-  padding: 6px 4px;
-  margin-top: 5px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px 8px;
+  background: rgba(13, 17, 23, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-top: 6px;
 }
 
 .metric-chip {
@@ -917,6 +970,7 @@ input:checked + .slider:before {
   align-items: center;
   justify-content: center;
   text-align: center;
+  padding: 2px 4px;
 }
 
 .chip-label {
@@ -942,6 +996,7 @@ input:checked + .slider:before {
 .chip-val.val-loss { color: #f85149; }
 .chip-val.val-rate { color: #38bdf8; }
 .chip-val.val-open { color: #e3b341; }
+.chip-val.val-gold { color: #fbbf24; }
 
 /* Sub header & Breakdown for ALL PROFILES view */
 .daily-item-sub {

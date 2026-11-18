@@ -726,12 +726,12 @@
 
     .fg-daily-metrics-bar {
       display: grid !important;
-      grid-template-columns: repeat(5, 1fr) !important;
-      gap: 6px !important;
-      background: rgba(13, 17, 23, 0.75) !important;
+      grid-template-columns: repeat(3, 1fr) !important;
+      gap: 6px 8px !important;
+      background: rgba(13, 17, 23, 0.85) !important;
       border: 1px solid rgba(255, 255, 255, 0.08) !important;
-      border-radius: 6px !important;
-      padding: 6px 4px !important;
+      border-radius: 8px !important;
+      padding: 8px 10px !important;
       margin-top: 6px !important;
     }
 
@@ -2410,54 +2410,57 @@
             `;
           }
 
-          return `
-            <div class="fg-daily-card ${cardClass}">
-              <div class="fg-daily-row-top">
-                <div style="display:flex;align-items:center;gap:8px;">
-                  <span style="font-weight:800;color:#f8fafc;font-size:12.5px;">${r.displayDate}</span>
-                  <span style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px;background:rgba(255,255,255,0.08);color:#94a3b8;">${r.dayName}</span>
-                  ${isToday ? `<span style="font-size:10px;font-weight:800;padding:1px 6px;border-radius:4px;background:rgba(56,189,248,0.2);color:#38bdf8;">TODAY</span>` : ""}
-                </div>
-                <div>
-                  <span class="fg-tbl-pill ${pillClass}" style="font-size:12px;font-weight:800;padding:3px 8px;">
-                    ${pnlSign}${formatInr(pnl)}
-                  </span>
-                </div>
-              </div>
+              const chg = Number(r.charges) || 0;
+              const totalProfitVal = pnl - chg;
 
-              <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;margin-bottom:4px;">
-                <span style="color:#38bdf8;font-weight:700;font-size:11px;">👤 ${r.user || drawerDailyUser}</span>
-                <span style="font-size:9.5px;font-weight:800;letter-spacing:0.4px;padding:1px 6px;border-radius:3px;text-transform:uppercase;background:rgba(255,255,255,0.08);color:${isProfit ? '#22c55e' : (isLoss ? '#ef4444' : '#94a3b8')}">${r.status || (isProfit ? 'PROFIT' : (isLoss ? 'LOSS' : 'BREAKEVEN'))}</span>
-              </div>
+              return `
+              <div class="fg-daily-card ${cardClass}">
+                <div class="fg-daily-row-top">
+                  <div style="display:flex;align-items:center;gap:8px;">
+                    <span style="font-weight:800;color:#f8fafc;font-size:12.5px;">${r.displayDate}</span>
+                    <span style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px;background:rgba(255,255,255,0.08);color:#94a3b8;">${r.dayName}</span>
+                    ${isToday ? `<span style="font-size:10px;font-weight:800;padding:1px 6px;border-radius:4px;background:rgba(56,189,248,0.2);color:#38bdf8;">TODAY</span>` : ""}
+                  </div>
+                  <div>
+                    <span class="fg-tbl-pill ${pillClass}" style="font-size:12px;font-weight:800;padding:3px 8px;">
+                      ${pnlSign}${formatInr(pnl)}
+                    </span>
+                  </div>
+                </div>
 
-              <div class="fg-daily-metrics-bar">
-                <div class="fg-metric-chip" title="Total trades executed">
-                  <span class="fg-chip-label">TRADES</span>
-                  <span class="fg-chip-val">${trades}</span>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;margin-bottom:4px;">
+                  <span style="color:#38bdf8;font-weight:700;font-size:11px;">👤 ${r.user || drawerDailyUser}</span>
+                  <span style="font-size:9.5px;font-weight:800;letter-spacing:0.4px;padding:1px 6px;border-radius:3px;text-transform:uppercase;background:rgba(255,255,255,0.08);color:${isProfit ? '#22c55e' : (isLoss ? '#ef4444' : '#94a3b8')}">${r.status || (isProfit ? 'PROFIT' : (isLoss ? 'LOSS' : 'BREAKEVEN'))}</span>
                 </div>
-                <div class="fg-metric-chip" title="Charges & Taxes (from website/broker)">
-                  <span class="fg-chip-label">CHARGES</span>
-                  <span class="fg-chip-val" style="color:#fbbf24;">₹${(Number(r.charges) || 0).toFixed(2)}</span>
-                </div>
-                <div class="fg-metric-chip" title="Net Total after Charges & Taxes (Total P&L - Charges)">
-                  <span class="fg-chip-label">NET AFTER</span>
-                  <span class="fg-chip-val ${(pnl - (Number(r.charges) || 0)) >= 0 ? "val-win" : "val-loss"}">${(pnl - (Number(r.charges) || 0)) >= 0 ? "+" : ""}₹${(pnl - (Number(r.charges) || 0)).toFixed(2)}</span>
-                </div>
-                <div class="fg-metric-chip" title="Winning / Losing trades">
-                  <span class="fg-chip-label">W / L</span>
-                  <span class="fg-chip-val"><span class="val-win">${wins}W</span>/<span class="val-loss">${losses}L</span></span>
-                </div>
-                <div class="fg-metric-chip" title="Session win rate percentage">
-                  <span class="fg-chip-label">WIN RATE</span>
-                  <span class="fg-chip-val val-rate">${wr.toFixed(1)}%</span>
-                </div>
-                <div class="fg-metric-chip" title="Currently open positions">
-                  <span class="fg-chip-label">OPEN</span>
-                  <span class="fg-chip-val val-open">${openPos}</span>
+
+                <div class="fg-daily-metrics-bar">
+                  <div class="fg-metric-chip" title="Total trades executed">
+                    <span class="fg-chip-label">TRADES</span>
+                    <span class="fg-chip-val">${trades}</span>
+                  </div>
+                  <div class="fg-metric-chip" title="Brokrage & Taxes">
+                    <span class="fg-chip-label">BROKRAGE</span>
+                    <span class="fg-chip-val" style="color:#fbbf24;">${formatInr(chg)}</span>
+                  </div>
+                  <div class="fg-metric-chip" title="Total Profit after Brokrage">
+                    <span class="fg-chip-label">TOTAL PROFIT</span>
+                    <span class="fg-chip-val ${totalProfitVal >= 0 ? "val-win" : "val-loss"}">${(totalProfitVal > 0 ? "+" : "") + formatInr(totalProfitVal)}</span>
+                  </div>
+                  <div class="fg-metric-chip" title="Winning / Losing trades">
+                    <span class="fg-chip-label">W / L</span>
+                    <span class="fg-chip-val"><span class="val-win">${wins}W</span> / <span class="val-loss">${losses}L</span></span>
+                  </div>
+                  <div class="fg-metric-chip" title="Session win rate percentage">
+                    <span class="fg-chip-label">WIN RATE</span>
+                    <span class="fg-chip-val val-rate">${wr.toFixed(1)}%</span>
+                  </div>
+                  <div class="fg-metric-chip" title="Currently open positions">
+                    <span class="fg-chip-label">OPEN</span>
+                    <span class="fg-chip-val val-open">${openPos} Open</span>
+                  </div>
                 </div>
               </div>
-            </div>
-          `;
+            `;
         }).join("")}
       </div>
     `;

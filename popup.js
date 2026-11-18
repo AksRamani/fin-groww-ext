@@ -157,13 +157,21 @@ function updatePopupUi(payload) {
   const charges = Number(acc.total_charges || acc.charges || 0);
   const netAfterCharges = totalPnl - charges;
 
-  if (charges > 0) {
-    retEl.innerHTML = `${retPct >= 0 ? "+" : ""}${retPct.toFixed(2)}% Return • <span style="color:var(--accent-gold);" title="Charges & Taxes from broker">Charges: ₹${charges.toFixed(2)}</span> • <span title="Net P&L after deducting charges">Net: ${netAfterCharges >= 0 ? "+" : ""}${formatInr(netAfterCharges)}</span>`;
-  } else {
-    retEl.textContent = `${retPct >= 0 ? "+" : ""}${retPct.toFixed(2)}% Overall Return`;
-  }
+  retEl.textContent = `${retPct >= 0 ? "+" : ""}${retPct.toFixed(2)}% Overall Return`;
   retEl.style.color =
     retPct > 0 ? "var(--green)" : retPct < 0 ? "var(--red)" : "var(--text-dim)";
+
+  // Update Professional Financial Breakdown Strip (Brokrage & Total Profit)
+  const elBrokerage = document.getElementById("kpiBrokerageVal");
+  if (elBrokerage) {
+    elBrokerage.textContent = formatInr(charges);
+  }
+  const elTotalProfit = document.getElementById("kpiTotalProfitVal");
+  if (elTotalProfit) {
+    elTotalProfit.textContent = (netAfterCharges > 0 ? "+" : "") + formatInr(netAfterCharges);
+    elTotalProfit.className =
+      "strip-value " + (netAfterCharges > 0 ? "val-green" : netAfterCharges < 0 ? "val-red" : "");
+  }
 
   document.getElementById("accountEquity").textContent = formatInr(
     acc.account_equity || entry?.equity || entry?.account_equity || 100000,
@@ -701,6 +709,9 @@ function renderDailyPnlView() {
       `;
       }
 
+      const chg = Number(r.charges) || 0;
+      const totalProfitVal = pnl - chg;
+
       // Single Profile View: Sleek Segmented Metrics Grid (ZERO text wrapping)
       return `
       <div class="daily-pnl-item ${rowClass}">
@@ -725,17 +736,17 @@ function renderDailyPnlView() {
             <span class="chip-label">TRADES</span>
             <span class="chip-val">${trades}</span>
           </div>
-          <div class="metric-chip" title="Charges & Taxes (from website/server)">
-            <span class="chip-label">CHARGES</span>
-            <span class="chip-val" style="color:var(--accent-gold);">₹${(Number(r.charges) || 0).toFixed(2)}</span>
+          <div class="metric-chip" title="Brokrage & Taxes">
+            <span class="chip-label">BROKRAGE</span>
+            <span class="chip-val val-gold">${formatInr(chg)}</span>
           </div>
-          <div class="metric-chip" title="Net Total after Charges & Taxes (Total P&L - Charges)">
-            <span class="chip-label">NET AFTER</span>
-            <span class="chip-val ${(pnl - (Number(r.charges) || 0)) >= 0 ? "val-win" : "val-loss"}">${(pnl - (Number(r.charges) || 0)) >= 0 ? "+" : ""}₹${(pnl - (Number(r.charges) || 0)).toFixed(2)}</span>
+          <div class="metric-chip" title="Total Profit after Brokrage">
+            <span class="chip-label">TOTAL PROFIT</span>
+            <span class="chip-val ${totalProfitVal >= 0 ? "val-win" : "val-loss"}">${(totalProfitVal > 0 ? "+" : "") + formatInr(totalProfitVal)}</span>
           </div>
           <div class="metric-chip" title="Winning / Losing trades">
             <span class="chip-label">W / L</span>
-            <span class="chip-val"><span class="val-win">${wins}W</span>/<span class="val-loss">${losses}L</span></span>
+            <span class="chip-val"><span class="val-win">${wins}W</span> / <span class="val-loss">${losses}L</span></span>
           </div>
           <div class="metric-chip" title="Session win rate percentage">
             <span class="chip-label">WIN RATE</span>
@@ -743,7 +754,7 @@ function renderDailyPnlView() {
           </div>
           <div class="metric-chip" title="Currently open positions">
             <span class="chip-label">OPEN</span>
-            <span class="chip-val val-open">${openPos}</span>
+            <span class="chip-val val-open">${openPos} Open</span>
           </div>
         </div>
       </div>
@@ -772,8 +783,8 @@ function exportDailyPnlToCsv() {
       "Time (IST)",
       "Trader / Profile",
       "Total P&L (INR)",
-      "Charges & Taxes (INR)",
-      "Net Total after Charges (INR)",
+      "Brokrage (INR)",
+      "Total Profit (INR)",
       "Realized P&L (INR)",
       "Unrealized P&L (INR)",
       "Account Equity (INR)",

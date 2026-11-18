@@ -49,18 +49,33 @@
     </div>
   </section>
 
-  <!-- KPI Overview (Total P&L + Equity) -->
-  <section class="kpi-grid">
-    <div class="kpi-card pnl-card">
-      <div class="kpi-lbl">Overall Profit & Loss</div>
-      <div class="kpi-val" id="totalPnl">₹0.00</div>
-      <div class="kpi-sub" id="returnPct">0.00% Return</div>
+  <!-- KPI Overview (Total P&L + Equity + Financial Breakdown) -->
+  <section class="kpi-section">
+    <div class="kpi-grid">
+      <div class="kpi-card pnl-card">
+        <div class="kpi-lbl">Overall Profit & Loss</div>
+        <div class="kpi-val" id="totalPnl">₹0.00</div>
+        <div class="kpi-sub" id="returnPct">0.00% Return</div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-lbl">Virtual Equity</div>
+        <div class="kpi-val val-blue" id="accountEquity">₹1,00,000</div>
+        <div class="kpi-sub" id="availableBal">Balance: ₹1,00,000</div>
+      </div>
     </div>
 
-    <div class="kpi-card">
-      <div class="kpi-lbl">Virtual Equity</div>
-      <div class="kpi-val val-blue" id="accountEquity">₹1,00,000</div>
-      <div class="kpi-sub" id="availableBal">Balance: ₹1,00,000</div>
+    <!-- Professional Financial Breakdown Strip -->
+    <div class="kpi-financial-strip">
+      <div class="financial-strip-item">
+        <span class="strip-label">BROKRAGE</span>
+        <span class="strip-value val-gold" id="kpiBrokerageVal">₹0.00</span>
+      </div>
+      <div class="financial-strip-divider"></div>
+      <div class="financial-strip-item">
+        <span class="strip-label">TOTAL PROFIT</span>
+        <span class="strip-value" id="kpiTotalProfitVal">₹0.00</span>
+      </div>
     </div>
   </section>
 

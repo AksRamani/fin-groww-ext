@@ -34,15 +34,15 @@ function doPost(e) {
       sheet = ss.insertSheet("Daily PnL Ledger");
     }
 
-    // Headers with Charges & Taxes and Net Total after Charges & Taxes
+    // Headers with Brokrage and Total Profit
     const headers = [
       "Date",
       "Day",
       "Time (IST)",
       "Trader / Profile",
       "Total P&L (₹)",
-      "Charges & Taxes (₹)",
-      "Net Total after Charges & Taxes (₹)",
+      "Brokrage (₹)",
+      "Total Profit (₹)",
       "Realized P&L (₹)",
       "Unrealized P&L (₹)",
       "Account Equity (₹)",
@@ -204,7 +204,7 @@ function onEdit(e) {
 
 /**
  * Migration helper: If user has an existing sheet with older 12 columns,
- * seamlessly insert Charges & Taxes and Net Total columns without data loss.
+ * seamlessly insert Brokrage and Total Profit columns without data loss.
  */
 function migrateLegacyColumnsIfNeeded(sheet, expectedHeaders) {
   try {
@@ -212,8 +212,8 @@ function migrateLegacyColumnsIfNeeded(sheet, expectedHeaders) {
     if (col6Val === "Realized P&L (₹)" || col6Val.includes("Realized")) {
       // Insert 2 new columns after Column 5 (Total P&L)
       sheet.insertColumnsAfter(5, 2);
-      sheet.getRange(1, 6).setValue("Charges & Taxes (₹)");
-      sheet.getRange(1, 7).setValue("Net Total after Charges & Taxes (₹)");
+      sheet.getRange(1, 6).setValue("Brokrage (₹)");
+      sheet.getRange(1, 7).setValue("Total Profit (₹)");
 
       const lastRow = sheet.getLastRow();
       if (lastRow > 1) {
@@ -225,6 +225,9 @@ function migrateLegacyColumnsIfNeeded(sheet, expectedHeaders) {
         }
       }
       applyHeaderFormatting(sheet);
+    } else if (col6Val.includes("Charges")) {
+      sheet.getRange(1, 6).setValue("Brokrage (₹)");
+      sheet.getRange(1, 7).setValue("Total Profit (₹)");
     }
   } catch (e) {}
 }
@@ -273,13 +276,13 @@ function formatRow(sheet, rowNum, isCombined, pnl, charges) {
     pnlCell.setFontColor(pnl > 0 ? "#15803d" : pnl < 0 ? "#b91c1c" : "#475569");
     pnlCell.setNumberFormat("₹#,##0.00;[Red](₹#,##0.00);₹0.00");
 
-    // 2. Charges & Taxes (Col 6)
+    // 2. Brokrage (Col 6)
     const chgCell = sheet.getRange(rowNum, 6);
     chgCell.setFontWeight("600");
     chgCell.setFontColor("#b45309"); // Dark Amber / Gold
     chgCell.setNumberFormat("₹#,##0.00;₹0.00");
 
-    // 3. Net Total after Charges & Taxes (Col 7)
+    // 3. Total Profit (Col 7)
     const netCell = sheet.getRange(rowNum, 7);
     netCell.setFontWeight("bold");
     const netVal = pnl - charges;
