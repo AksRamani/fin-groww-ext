@@ -55,11 +55,13 @@ A high-frequency Chrome extension (Manifest V3) that docks a professional tradin
 - **100% Real Server Data Only**: Zero dummy, mock, or seeded past dates data. Only captures actual trading activity from live profiles that executed trades or booked profit/loss.
 - **Strictly Profile-by-Profile**:
   - No combined totals or combined investment summaries.
-  - Review any specific trader profile (`14K Traders`, `Aks-new-55k`, `Akshay`, `Parth F&O`, etc.) individually to analyze their exact session P&L, trade counts, equity, and win rates.
-- **Summary KPI Cards**:
+  - Review any specific trader profile (`PARTH 18-Nov`, `Aks-new-55k`, `Akshay`, `FinGroww-Alpha`, etc.) individually to analyze their exact session P&L, trade counts, equity, win rates, broker charges, and net return after fees.
+- **Summary KPI Cards & Item Chips**:
   - **Total Profit**: Sum of all winning day profits ($\sum_{pnl > 0} pnl$) with count of winning days.
   - **Total Loss**: Sum of all losing day losses ($\sum_{pnl < 0} |pnl|$) with count of losing days.
   - **Net Total P&L**: $\text{Total Profit} - \text{Total Loss}$ (color-coded in emerald green / red).
+  - **Charges & Taxes**: Real broker charges & taxes fetched per profile from the website/account card.
+  - **Net Total after Charges**: Live deduction ($\text{Total P\&L} - \text{Charges \& Taxes}$) displayed on every daily ledger card.
   - **Win Rate %**: Calculated win percentage (`winDays / totalDays * 100`).
 - **Dual-Surface Availability**:
   - Available inside the extension popup under the **📅 Day-to-Day P&L** tab.
@@ -67,15 +69,30 @@ A high-frequency Chrome extension (Manifest V3) that docks a professional tradin
 
 ### 7. Google Sheets End-of-Day Auto-Sync & CSV Export (Option A: Master Ledger)
 - **Automatic Sync at Market Close (3:30 PM IST)**: At the end of the day after 3:30 PM IST, the extension gathers all profile data for profiles that made trades or booked profit/loss, and automatically syncs them to your connected Google Sheet.
-- **Profile-by-Profile Ledger Structure**:
-  - Appends rows chronologically: Date, Day, Time, Trader / Profile, Total P&L (₹), Realized P&L, Unrealized P&L, Account Equity, Trades Count, Session Status, and Trade Notes.
-  - No combined summary row; strictly individual real profile rows.
+- **14-Column Profile-by-Profile Ledger Structure**:
+  1. **Date** (e.g. `18 Nov 2026`)
+  2. **Day** (e.g. `Wednesday`)
+  3. **Time (IST)** (e.g. `15:30:00`)
+  4. **Trader / Profile** (e.g. `PARTH 18-Nov`)
+  5. **Total P&L (₹)** (Gross / Net P&L before charges)
+  6. **Charges & Taxes (₹)** (Real broker charges & taxes fetched directly per profile from the website card)
+  7. **Net Total after Charges & Taxes (₹)** (Dynamic formula: `=E{row}-F{row}`)
+  8. **Realized P&L (₹)**
+  9. **Unrealized P&L (₹)**
+  10. **Account Equity (₹)**
+  11. **Trades Count**
+  12. **Session Status**
+  13. **Win Rate / Notes**
+  14. **Last Synced At**
+- **Live Auto-Calculation while Editing the Sheet**:
+  - Whenever you manually edit **Total P&L** (Column E) or **Charges & Taxes** (Column F) inside Google Sheets, **Column G** (`Net Total after Charges & Taxes`) updates automatically via formula and Apps Script trigger `onEdit(e)`.
+  - Color-codes positive net total in bold green and losses in bold red.
+  - **Auto-Migration of Existing Sheets**: Existing sheets with 12 columns automatically have the 2 new columns inserted and formulas generated without losing prior rows.
   - **Smart Upsert (Zero Duplicates)**: If synced more than once on the same day, the Google Apps Script updates existing rows in place rather than creating duplicate entries.
-  - **Auto-Purge of Legacy Rows**: Webhook automatically purges any previous combined summary rows from the sheet.
 - **Popup Controls**:
   - **⚙️ Config Drawer**: Easily save your Google Apps Script Webhook URL and toggle auto-sync.
   - **📤 Sync to Sheet Now**: One-click manual sync for immediate export with live progress feedback and automatic CORS/redirect fallback.
-  - **📥 Export CSV**: One-click offline export downloading the complete profile ledger as a `.csv` file.
+  - **📥 Daily Ledger CSV**: One-click offline export downloading the complete 13-column profile ledger as a `.csv` file.
 
 ### 8. End-of-Day Complete Trade Details CSV Auto-Download (150+ Trades)
 - **Automatic Download at Market Close (3:30 PM IST)**:
@@ -95,6 +112,10 @@ A high-frequency Chrome extension (Manifest V3) that docks a professional tradin
 ### 9. Real-Time Synchronization & Stale-While-Revalidate Engine
 - **Fast 3-Second State Polling**: Fetches account metrics, active positions, profiles, and running leaderboards every 3 seconds.
 - **10-Second Live Market Quotes Tick**: Runs `POST /api/paper/session/tick` asynchronously during market hours to recalculate NSE live option/equity quotes on the server.
+- **Reliable Multi-Profile Switching**:
+  - Guarantees immediate visual update when choosing any profile without auto-reverting to previously stored profiles.
+  - Direct endpoint query (`/api/paper/session/state?user=<profile>`) loads fresh profile data instantly.
+  - In-flight background sync race conditions and cross-profile payload mismatches are strictly rejected.
 - **Stale-While-Revalidate Cache**:
   - Maintains persistent multi-profile caches in memory and `chrome.storage.local`.
   - **Never** overwrites valid trade data with empty defaults (`[]` or `{}`) when the server is busy or network requests time out.
