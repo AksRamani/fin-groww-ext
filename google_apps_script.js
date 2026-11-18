@@ -21,8 +21,14 @@
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu("FinGroww")
-    .addItem("🚀 Reset & Load 18 Nov (Fresh Clean Table)", "resetSheetTodayOnly")
-    .addItem("🧹 Clean Duplicates & Reformat All (Daily Tables)", "cleanDuplicatesAndFixSheet")
+    .addItem(
+      "🚀 Reset & Load 18 Nov (Fresh Clean Table)",
+      "resetSheetTodayOnly",
+    )
+    .addItem(
+      "🧹 Clean Duplicates & Reformat All (Daily Tables)",
+      "cleanDuplicatesAndFixSheet",
+    )
     .addItem("🔄 Recalculate Formulas", "recalculateAllFormulas")
     .addToUi();
 }
@@ -598,7 +604,9 @@ function resetSheetTodayOnly() {
   }
 
   const todayKey = "2026-11-18";
-  const nowIst = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+  const nowIst = new Date().toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata",
+  });
 
   // Direct verified server metrics for 18 Nov 2026 active profiles
   const todayRecords = {
@@ -714,22 +722,38 @@ function resetSheetTodayOnly() {
 
   // Attempt live update from server API
   try {
-    const profRes = UrlFetchApp.fetch("https://fingroww-trading.onrender.com/api/paper/profiles", { muteHttpExceptions: true });
+    const profRes = UrlFetchApp.fetch(
+      "https://fingroww-trading.onrender.com/api/paper/profiles",
+      { muteHttpExceptions: true },
+    );
     if (profRes.getResponseCode() === 200) {
       const pJson = JSON.parse(profRes.getContentText());
       (pJson.profiles || []).forEach((p) => {
         try {
-          const stRes = UrlFetchApp.fetch(`https://fingroww-trading.onrender.com/api/paper/session/state?user=${encodeURIComponent(p.user_name)}`, { muteHttpExceptions: true });
+          const stRes = UrlFetchApp.fetch(
+            `https://fingroww-trading.onrender.com/api/paper/session/state?user=${encodeURIComponent(p.user_name)}`,
+            { muteHttpExceptions: true },
+          );
           if (stRes.getResponseCode() === 200) {
             const stJson = JSON.parse(stRes.getContentText());
             if (stJson && stJson.account) {
               const acc = stJson.account;
-              const trades = Number(acc.total_trades || (stJson.stats && stJson.stats.total_trades) || p.total_trades || 0);
-              const pnl = Number(acc.total_pnl !== undefined ? acc.total_pnl : p.net_pnl) || 0;
+              const trades = Number(
+                acc.total_trades ||
+                  (stJson.stats && stJson.stats.total_trades) ||
+                  p.total_trades ||
+                  0,
+              );
+              const pnl =
+                Number(
+                  acc.total_pnl !== undefined ? acc.total_pnl : p.net_pnl,
+                ) || 0;
               const charges = Number(acc.total_charges || 0);
               if (trades > 0 || pnl !== 0 || charges > 0) {
                 const k = normalizeTrader(p.user_name);
-                const openCount = stJson.active_positions ? stJson.active_positions.length : 0;
+                const openCount = stJson.active_positions
+                  ? stJson.active_positions.length
+                  : 0;
                 let notes = `${trades} trades (${p.winning_trades || 0}W / ${p.losing_trades || 0}L - ${(p.win_rate || 0).toFixed(1)}% WR)`;
                 if (openCount > 0) notes += ` • ${openCount} Open`;
 
@@ -826,9 +850,24 @@ function normalizeDate(val) {
   }
 
   // 3. Strict DD MMM YYYY (e.g. "18 Nov 2026" with 4-digit year 2024-2030)
-  const dmyMatch = s.match(/(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(202[4-9])/i);
+  const dmyMatch = s.match(
+    /(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(202[4-9])/i,
+  );
   if (dmyMatch) {
-    const months = { jan: "01", feb: "02", mar: "03", apr: "04", may: "05", jun: "06", jul: "07", aug: "08", sep: "09", oct: "10", nov: "11", dec: "12" };
+    const months = {
+      jan: "01",
+      feb: "02",
+      mar: "03",
+      apr: "04",
+      may: "05",
+      jun: "06",
+      jul: "07",
+      aug: "08",
+      sep: "09",
+      oct: "10",
+      nov: "11",
+      dec: "12",
+    };
     const mo = months[dmyMatch[2].slice(0, 3).toLowerCase()];
     return `${dmyMatch[3]}-${mo}-${dmyMatch[1].padStart(2, "0")}`;
   }
