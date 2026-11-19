@@ -668,6 +668,155 @@ function csvStringToDataUrl(csvText) {
   return "data:text/csv;charset=utf-8;base64," + btoa(binary);
 }
 
+// Attempt direct save to D:\Tred CSVs via local helper (port 8787)
+async function trySaveCsvToLocalServer(filename, csvContent) {
+  try {
+    const res = await fetch("http://127.0.0.1:8787/api/save-trades-csv", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        filename: filename,
+        csvContent: csvContent,
+        targetDir: "D:\\Tred CSVs"
+      })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.success) {
+        console.log(`[FinGroww Background] Saved directly to D:\\Tred CSVs via local server: ${filename}`);
+        return true;
+      }
+    }
+  } catch (e) {
+    // Local server not running or unreachable
+  }
+  return false;
+}
+
+// Helper to build CSV structure and rows for trade details (closed trades + active positions)
+function buildProfileTradesCsv(targetProfile, closedTrades = [], openPositions = []) {
+  const headers = [
+    "Trade ID",
+    "Trader Profile",
+    "Symbol",
+    "Instrument Name",
+    "Instrument Type",
+    "Side",
+    "Status",
+    "Quantity",
+    "Entry Price (INR)",
+    "Exit / Current Price (INR)",
+    "Target Price (INR)",
+    "Stop Loss (INR)",
+    "Gross P&L (INR)",
+    "Charges (INR)",
+    "Net P&L (INR)",
+    "Return %",
+    "Outcome",
+    "Exit Reason",
+    "Entry Time",
+    "Exit Time",
+    "Holding Duration",
+    "Strategy",
+    "Trailing State",
+    "Slippage (INR)",
+    "Allocated Margin (INR)",
+    "Expiry Date",
+    "Signal Rationale"
+  ];
+
+  const rawRows = [];
+
+  // 1. Append closed trades
+  for (const t of closedTrades) {
+    const net = Number(t.net_pnl) || 0;
+    const gross = Number(t.gross_pnl) || 0;
+    const charges = Number(t.charges) || 0;
+    const retPct = Number(t.return_pct) || 0;
+    const isWin = t.is_win !== undefined ? t.is_win : net > 0;
+    const outcome = isWin ? "WIN" : (net < 0 ? "LOSS" : "BREAKEVEN");
+    const exitReason = t.exit_reason || "MANUAL_EXIT";
+
+    rawRows.push([
+      escapeCsvCell(t.trade_id || ""),
+      escapeCsvCell(targetProfile),
+      escapeCsvCell(t.symbol || ""),
+      escapeCsvCell(t.name || t.symbol || ""),
+      escapeCsvCell(t.instrument_type || "STOCK_OPTIONS"),
+      escapeCsvCell(t.side || "BUY"),
+      escapeCsvCell("CLOSED"),
+      escapeCsvCell(t.quantity || 0),
+      escapeCsvCell(Number(t.entry_price || 0).toFixed(2)),
+      escapeCsvCell(Number(t.exit_price || 0).toFixed(2)),
+      escapeCsvCell(Number(t.target_price || 0).toFixed(2)),
+      escapeCsvCell(Number(t.stop_loss || 0).toFixed(2)),
+      escapeCsvCell(gross.toFixed(2)),
+      escapeCsvCell(charges.toFixed(2)),
+      escapeCsvCell(net.toFixed(2)),
+      escapeCsvCell(retPct.toFixed(2) + "%"),
+      escapeCsvCell(outcome),
+      escapeCsvCell(exitReason),
+      escapeCsvCell(t.entry_time || ""),
+      escapeCsvCell(t.exit_time || t.closed_at || ""),
+      escapeCsvCell(t.holding_duration_str || (t.holding_seconds ? `${t.holding_seconds}s` : "")),
+      escapeCsvCell(t.strategy || ""),
+      escapeCsvCell(t.trailing_state || ""),
+      escapeCsvCell(Number(t.slippage || 0).toFixed(2)),
+      escapeCsvCell(Number(t.allocated_margin || t.used_amount || 0).toFixed(2)),
+      escapeCsvCell(t.expiry_date || t.expiry_label || ""),
+      escapeCsvCell(t.signal_rationale || "")
+    ]);
+  }
+
+  // 2. Append active open positions
+  for (const pos of openPositions) {
+    const unPnl = Number(pos.unrealized_pnl) || 0;
+    const pnlPct = Number(pos.pnl_pct) || 0;
+    const outcome = unPnl > 0 ? "UNREALIZED_WIN" : (unPnl < 0 ? "UNREALIZED_LOSS" : "OPEN");
+
+    rawRows.push([
+      escapeCsvCell(pos.trade_id || ""),
+      escapeCsvCell(targetProfile),
+      escapeCsvCell(pos.symbol || ""),
+      escapeCsvCell(pos.name || pos.symbol || ""),
+      escapeCsvCell(pos.instrument_type || "STOCK_OPTIONS"),
+      escapeCsvCell(pos.side || "BUY"),
+      escapeCsvCell("OPEN"),
+      escapeCsvCell(pos.quantity || 0),
+      escapeCsvCell(Number(pos.entry_price || 0).toFixed(2)),
+      escapeCsvCell(Number(pos.current_price || pos.ltp || pos.entry_price || 0).toFixed(2)),
+      escapeCsvCell(Number(pos.target_price || 0).toFixed(2)),
+      escapeCsvCell(Number(pos.stop_loss || 0).toFixed(2)),
+      escapeCsvCell(unPnl.toFixed(2)),
+      escapeCsvCell(Number(pos.total_charges || pos.entry_charges || 0).toFixed(2)),
+      escapeCsvCell(unPnl.toFixed(2)),
+      escapeCsvCell(pnlPct.toFixed(2) + "%"),
+      escapeCsvCell(outcome),
+      escapeCsvCell(pos.exit_reason || "OPEN_POSITION"),
+      escapeCsvCell(pos.entry_time || ""),
+      escapeCsvCell("-"),
+      escapeCsvCell(pos.holding_duration_display || "-"),
+      escapeCsvCell(pos.strategy || ""),
+      escapeCsvCell(pos.trailing_state || ""),
+      escapeCsvCell(Number(pos.slippage || 0).toFixed(2)),
+      escapeCsvCell(Number(pos.allocated_margin || pos.used_amount || 0).toFixed(2)),
+      escapeCsvCell(pos.expiry_date || pos.expiry_label || ""),
+      escapeCsvCell(pos.signal_rationale || "")
+    ]);
+  }
+
+  const csvContent = [headers.join(","), ...rawRows.map(r => r.join(","))].join("\r\n");
+
+  return {
+    headers,
+    rawRows,
+    csvContent,
+    totalTradesCount: rawRows.length,
+    closedCount: closedTrades.length,
+    openCount: openPositions.length
+  };
+}
+
 // Export complete trade details for a specific trader profile (supports 150+ trades, profit, loss, exit reason, prices)
 async function exportProfileTradesCsv(options = {}) {
   try {
@@ -705,126 +854,16 @@ async function exportProfileTradesCsv(options = {}) {
     }
 
     const { dateKey: todayKey } = getIstDateInfo();
+    const { csvContent, totalTradesCount, closedCount, openCount } = buildProfileTradesCsv(targetProfile, closedTrades, openPositions);
 
-    const headers = [
-      "Trade ID",
-      "Trader Profile",
-      "Symbol",
-      "Instrument Name",
-      "Instrument Type",
-      "Side",
-      "Status",
-      "Quantity",
-      "Entry Price (INR)",
-      "Exit / Current Price (INR)",
-      "Target Price (INR)",
-      "Stop Loss (INR)",
-      "Gross P&L (INR)",
-      "Charges (INR)",
-      "Net P&L (INR)",
-      "Return %",
-      "Outcome",
-      "Exit Reason",
-      "Entry Time",
-      "Exit Time",
-      "Holding Duration",
-      "Strategy",
-      "Trailing State",
-      "Slippage (INR)",
-      "Allocated Margin (INR)",
-      "Expiry Date",
-      "Signal Rationale"
-    ];
-
-    const rows = [headers.join(",")];
-
-    // 1. Append all closed trades (e.g. 150+ closed trades)
-    for (const t of closedTrades) {
-      const net = Number(t.net_pnl) || 0;
-      const gross = Number(t.gross_pnl) || 0;
-      const charges = Number(t.charges) || 0;
-      const retPct = Number(t.return_pct) || 0;
-      const isWin = t.is_win !== undefined ? t.is_win : net > 0;
-      const outcome = isWin ? "WIN" : (net < 0 ? "LOSS" : "BREAKEVEN");
-      const exitReason = t.exit_reason || "MANUAL_EXIT";
-
-      const row = [
-        escapeCsvCell(t.trade_id || ""),
-        escapeCsvCell(targetProfile),
-        escapeCsvCell(t.symbol || ""),
-        escapeCsvCell(t.name || t.symbol || ""),
-        escapeCsvCell(t.instrument_type || "STOCK_OPTIONS"),
-        escapeCsvCell(t.side || "BUY"),
-        escapeCsvCell("CLOSED"),
-        escapeCsvCell(t.quantity || 0),
-        escapeCsvCell(Number(t.entry_price || 0).toFixed(2)),
-        escapeCsvCell(Number(t.exit_price || 0).toFixed(2)),
-        escapeCsvCell(Number(t.target_price || 0).toFixed(2)),
-        escapeCsvCell(Number(t.stop_loss || 0).toFixed(2)),
-        escapeCsvCell(gross.toFixed(2)),
-        escapeCsvCell(charges.toFixed(2)),
-        escapeCsvCell(net.toFixed(2)),
-        escapeCsvCell(retPct.toFixed(2) + "%"),
-        escapeCsvCell(outcome),
-        escapeCsvCell(exitReason),
-        escapeCsvCell(t.entry_time || ""),
-        escapeCsvCell(t.exit_time || t.closed_at || ""),
-        escapeCsvCell(t.holding_duration_str || (t.holding_seconds ? `${t.holding_seconds}s` : "")),
-        escapeCsvCell(t.strategy || ""),
-        escapeCsvCell(t.trailing_state || ""),
-        escapeCsvCell(Number(t.slippage || 0).toFixed(2)),
-        escapeCsvCell(Number(t.allocated_margin || t.used_amount || 0).toFixed(2)),
-        escapeCsvCell(t.expiry_date || t.expiry_label || ""),
-        escapeCsvCell(t.signal_rationale || "")
-      ];
-      rows.push(row.join(","));
-    }
-
-    // 2. Append any active open positions (if still open at EOD)
-    for (const pos of openPositions) {
-      const unPnl = Number(pos.unrealized_pnl) || 0;
-      const pnlPct = Number(pos.pnl_pct) || 0;
-      const outcome = unPnl > 0 ? "UNREALIZED_WIN" : (unPnl < 0 ? "UNREALIZED_LOSS" : "OPEN");
-
-      const row = [
-        escapeCsvCell(pos.trade_id || ""),
-        escapeCsvCell(targetProfile),
-        escapeCsvCell(pos.symbol || ""),
-        escapeCsvCell(pos.name || pos.symbol || ""),
-        escapeCsvCell(pos.instrument_type || "STOCK_OPTIONS"),
-        escapeCsvCell(pos.side || "BUY"),
-        escapeCsvCell("OPEN"),
-        escapeCsvCell(pos.quantity || 0),
-        escapeCsvCell(Number(pos.entry_price || 0).toFixed(2)),
-        escapeCsvCell(Number(pos.current_price || pos.ltp || pos.entry_price || 0).toFixed(2)),
-        escapeCsvCell(Number(pos.target_price || 0).toFixed(2)),
-        escapeCsvCell(Number(pos.stop_loss || 0).toFixed(2)),
-        escapeCsvCell(unPnl.toFixed(2)),
-        escapeCsvCell(Number(pos.total_charges || pos.entry_charges || 0).toFixed(2)),
-        escapeCsvCell(unPnl.toFixed(2)),
-        escapeCsvCell(pnlPct.toFixed(2) + "%"),
-        escapeCsvCell(outcome),
-        escapeCsvCell("OPEN_POSITION"),
-        escapeCsvCell(pos.entry_time || ""),
-        escapeCsvCell("-"),
-        escapeCsvCell(pos.holding_duration_display || "-"),
-        escapeCsvCell(pos.strategy || ""),
-        escapeCsvCell(pos.trailing_state || ""),
-        escapeCsvCell(Number(pos.slippage || 0).toFixed(2)),
-        escapeCsvCell(Number(pos.allocated_margin || pos.used_amount || 0).toFixed(2)),
-        escapeCsvCell(pos.expiry_date || pos.expiry_label || ""),
-        escapeCsvCell(pos.signal_rationale || "")
-      ];
-      rows.push(row.join(","));
-    }
-
-    const totalTradesCount = closedTrades.length + openPositions.length;
-    const csvContent = rows.join("\r\n");
     const sanitizedProfile = targetProfile.replace(/[^a-zA-Z0-9_-]/g, "_");
     const filename = `FinGroww_Trades_${sanitizedProfile}_${todayKey}.csv`;
     const dataUrl = csvStringToDataUrl(csvContent);
 
-    // Trigger Chrome browser download
+    // 1. Direct write to D:\Tred CSVs if local helper is listening
+    await trySaveCsvToLocalServer(filename, csvContent);
+
+    // 2. Trigger Chrome browser download
     let downloadId = null;
     if (typeof chrome.downloads !== "undefined" && chrome.downloads.download) {
       try {
@@ -858,8 +897,8 @@ async function exportProfileTradesCsv(options = {}) {
     return {
       success: true,
       count: totalTradesCount,
-      closedCount: closedTrades.length,
-      openCount: openPositions.length,
+      closedCount: closedCount,
+      openCount: openCount,
       filename: filename,
       downloadId: downloadId,
       csvContent: csvContent
@@ -874,7 +913,262 @@ async function exportProfileTradesCsv(options = {}) {
   }
 }
 
-// Auto-download trade details CSV for the selected profile at Indian market close (3:30 PM IST)
+// Export individual CSV files after market close for ALL profiles that are in a loss or profit
+async function exportAllProfilesTradesCsv(options = {}) {
+  try {
+    const { dateKey: todayKey } = getIstDateInfo();
+    console.log(`[FinGroww Background] Starting End-of-Day Trade Details CSV export for all profiles in loss or profit on ${todayKey}...`);
+
+    // 1. Discover all candidate profiles from server API, cache, leaderboard, and history
+    const [profilesRes, leaderboardRes] = await Promise.all([
+      apiFetch("/api/paper/profiles", {}, 12000).catch(() => null),
+      apiFetch("/api/paper/leaderboard", {}, 12000).catch(() => null)
+    ]);
+
+    const stored = await chrome.storage.local.get([
+      "fg_profiles_cache",
+      "fg_selected_profile",
+      "fg_daily_pnl_history",
+      "fg_latest_data"
+    ]);
+
+    const allProfilesMap = new Map();
+
+    const addProfileCandidate = (name, meta = {}) => {
+      if (!name || typeof name !== "string") return;
+      const cleanName = name.trim();
+      if (!cleanName || cleanName.includes("ALL USERS") || /^[-\d\.,]+$/.test(cleanName)) return;
+      const existing = allProfilesMap.get(cleanName) || {};
+      allProfilesMap.set(cleanName, { ...existing, ...meta, user_name: cleanName });
+    };
+
+    if (Array.isArray(profilesRes)) {
+      profilesRes.forEach(p => addProfileCandidate(p.user_name || p.name, p));
+    } else if (profilesRes && Array.isArray(profilesRes.profiles)) {
+      profilesRes.profiles.forEach(p => addProfileCandidate(p.user_name || p.name, p));
+    }
+
+    if (leaderboardRes && Array.isArray(leaderboardRes.leaderboard)) {
+      leaderboardRes.leaderboard.forEach(p => addProfileCandidate(p.user_name || p.name, p));
+    }
+
+    if (stored.fg_profiles_cache && Array.isArray(stored.fg_profiles_cache)) {
+      stored.fg_profiles_cache.forEach(p => addProfileCandidate(typeof p === "string" ? p : p.user_name, p));
+    }
+
+    if (stored.fg_daily_pnl_history && stored.fg_daily_pnl_history.byUser) {
+      Object.keys(stored.fg_daily_pnl_history.byUser).forEach(u => addProfileCandidate(u));
+    }
+
+    if (stored.fg_selected_profile) {
+      addProfileCandidate(stored.fg_selected_profile);
+    }
+    if (currentProfile) {
+      addProfileCandidate(currentProfile);
+    }
+
+    console.log(`[FinGroww Background] Discovered ${allProfilesMap.size} unique candidate profiles across all sources.`);
+
+    // 2. Filter profiles that are in PROFIT or LOSS (or have trade activity)
+    const activeProfitLossProfiles = [];
+
+    for (const [pName, meta] of allProfilesMap.entries()) {
+      let isCandidate = false;
+      const netPnl = Number(meta.net_pnl !== undefined ? meta.net_pnl : (meta.total_pnl !== undefined ? meta.total_pnl : meta.realized_pnl)) || 0;
+      const tradesCount = Number(meta.total_trades || meta.trades_count) || 0;
+
+      // If metadata already indicates profit or loss or trades, mark as candidate
+      if (Math.abs(netPnl) > 0.001 || tradesCount > 0) {
+        isCandidate = true;
+      } else {
+        // Check daily history for today
+        const userDay = stored.fg_daily_pnl_history?.byUser?.[pName]?.[todayKey];
+        if (userDay && (Math.abs(Number(userDay.totalPnl) || 0) > 0.001 || Number(userDay.tradesCount) > 0)) {
+          isCandidate = true;
+        }
+      }
+
+      if (isCandidate) {
+        activeProfitLossProfiles.push({ name: pName, pnl: netPnl, trades: tradesCount });
+      }
+    }
+
+    console.log(`[FinGroww Background] Found ${activeProfitLossProfiles.length} active profit/loss profiles to fetch trade details.`);
+
+    if (activeProfitLossProfiles.length === 0) {
+      const msg = "No profiles found in profit or loss with trades today.";
+      console.warn(`[FinGroww Background] ${msg}`);
+      await chrome.storage.local.set({
+        fg_eod_csv_last_status: "WARNING",
+        fg_eod_csv_last_msg: msg
+      });
+      return { success: false, error: msg, count: 0, exportedFiles: [] };
+    }
+
+    // 3. For each profile in profit or loss: fetch full trade details and trigger individual CSV download
+    const exportedFiles = [];
+    const allCombinedRawRows = [];
+    let grandTotalTrades = 0;
+
+    for (let i = 0; i < activeProfitLossProfiles.length; i++) {
+      const prof = activeProfitLossProfiles[i];
+      const pName = prof.name;
+
+      try {
+        console.log(`[FinGroww Background] [${i + 1}/${activeProfitLossProfiles.length}] Fetching complete trade details for "${pName}"...`);
+
+        const [tradesRes, sessionRes] = await Promise.all([
+          apiFetch(`/api/paper/trades?user=${encodeURIComponent(pName)}&limit=10000`, {}, 25000).catch(err => {
+            console.warn(`[FinGroww Background] Trades fetch failed for ${pName}:`, err);
+            return null;
+          }),
+          apiFetch(`/api/paper/session/state?user=${encodeURIComponent(pName)}`, {}, 20000).catch(err => {
+            console.warn(`[FinGroww Background] Session fetch failed for ${pName}:`, err);
+            return null;
+          })
+        ]);
+
+        const closedTrades = tradesRes && Array.isArray(tradesRes.trades) ? tradesRes.trades : [];
+        const openPositions = sessionRes && Array.isArray(sessionRes.active_positions) ? sessionRes.active_positions : [];
+
+        // If no trades or positions found, verify if profile has recorded PnL
+        const sessionAccount = sessionRes?.account || {};
+        const sessPnl = Number(sessionAccount.total_pnl !== undefined ? sessionAccount.total_pnl : prof.pnl) || 0;
+
+        if (closedTrades.length === 0 && openPositions.length === 0) {
+          console.log(`[FinGroww Background] No trades found for ${pName}, skipping CSV.`);
+          continue;
+        }
+
+        const { headers, rawRows, csvContent, totalTradesCount } = buildProfileTradesCsv(pName, closedTrades, openPositions);
+
+        // Accumulate for master combined CSV
+        rawRows.forEach(r => allCombinedRawRows.push(r));
+        grandTotalTrades += totalTradesCount;
+
+        // Individual CSV filename: FinGroww_Trades_<Profile>_<YYYY-MM-DD>.csv
+        const sanitizedProfile = pName.replace(/[^a-zA-Z0-9_-]/g, "_");
+        const filename = `FinGroww_Trades_${sanitizedProfile}_${todayKey}.csv`;
+        const dataUrl = csvStringToDataUrl(csvContent);
+
+        // 1. Direct write to D:\Tred CSVs if local helper is listening
+        await trySaveCsvToLocalServer(filename, csvContent);
+
+        // 2. Trigger Chrome browser download
+        let dlId = null;
+        if (typeof chrome.downloads !== "undefined" && chrome.downloads.download) {
+          try {
+            dlId = await chrome.downloads.download({
+              url: dataUrl,
+              filename: filename,
+              saveAs: false,
+              conflictAction: "uniquify"
+            });
+            console.log(`[FinGroww Background] Download triggered: id=${dlId} -> ${filename} (${totalTradesCount} trades)`);
+          } catch (dlErr) {
+            console.warn(`[FinGroww Background] Download failed for ${filename}:`, dlErr);
+          }
+        }
+
+        exportedFiles.push({
+          profile: pName,
+          filename: filename,
+          tradesCount: totalTradesCount,
+          closedCount: closedTrades.length,
+          openCount: openPositions.length,
+          pnl: sessPnl,
+          downloadId: dlId,
+          csvContent: csvContent
+        });
+
+        // Small delay between downloads so Chrome handles sequential downloads smoothly
+        if (i < activeProfitLossProfiles.length - 1) {
+          await new Promise(r => setTimeout(r, 400));
+        }
+
+      } catch (profErr) {
+        console.error(`[FinGroww Background] Error processing profile ${pName}:`, profErr);
+      }
+    }
+
+    // 4. Also generate and download master consolidated CSV for ALL profiles
+    if (exportedFiles.length > 1 && allCombinedRawRows.length > 0) {
+      try {
+        const dummyBuild = buildProfileTradesCsv("", [], []);
+        const combinedHeaders = dummyBuild.headers;
+        const combinedCsvContent = [combinedHeaders.join(","), ...allCombinedRawRows.map(r => r.join(","))].join("\r\n");
+        const combinedFilename = `FinGroww_Trades_ALL_PROFILES_${todayKey}.csv`;
+        const combinedDataUrl = csvStringToDataUrl(combinedCsvContent);
+
+        // 1. Direct write to D:\Tred CSVs if local helper is listening
+        await trySaveCsvToLocalServer(combinedFilename, combinedCsvContent);
+
+        let combinedDlId = null;
+        if (typeof chrome.downloads !== "undefined" && chrome.downloads.download) {
+          try {
+            combinedDlId = await chrome.downloads.download({
+              url: combinedDataUrl,
+              filename: combinedFilename,
+              saveAs: false,
+              conflictAction: "uniquify"
+            });
+            console.log(`[FinGroww Background] Master consolidated download triggered: id=${combinedDlId} -> ${combinedFilename} (${allCombinedRawRows.length} total trades)`);
+          } catch (combErr) {
+            console.warn(`[FinGroww Background] Master combined download error:`, combErr);
+          }
+        }
+
+        exportedFiles.push({
+          profile: "ALL_PROFILES",
+          filename: combinedFilename,
+          tradesCount: allCombinedRawRows.length,
+          downloadId: combinedDlId,
+          isCombined: true,
+          csvContent: combinedCsvContent
+        });
+      } catch (combErr) {
+        console.warn(`[FinGroww Background] Master CSV generation error:`, combErr);
+      }
+    }
+
+    const nowStr = new Date().toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata" });
+    const successCount = exportedFiles.filter(f => !f.isCombined).length;
+    const msg = `Successfully downloaded ${successCount} individual CSV files (${grandTotalTrades} total trades) for all profiles in profit/loss.`;
+
+    const updateObj = {
+      fg_eod_csv_last_status: "SUCCESS",
+      fg_eod_csv_last_msg: msg,
+      fg_eod_csv_last_time: nowStr,
+      fg_eod_csv_exported_count: successCount,
+      fg_eod_trades_count: grandTotalTrades,
+      fg_eod_csv_files: exportedFiles.map(f => f.filename)
+    };
+
+    if (options.isAutoEod) {
+      updateObj.fg_eod_trades_csv_downloaded_date = todayKey;
+    }
+
+    await chrome.storage.local.set(updateObj);
+
+    return {
+      success: true,
+      message: msg,
+      exportedCount: successCount,
+      totalTradesCount: grandTotalTrades,
+      exportedFiles: exportedFiles
+    };
+
+  } catch (err) {
+    console.error(`[FinGroww Background] exportAllProfilesTradesCsv error:`, err);
+    await chrome.storage.local.set({
+      fg_eod_csv_last_status: "ERROR",
+      fg_eod_csv_last_msg: err.message || "Export failed"
+    });
+    return { success: false, error: err.message || "Failed to export all profiles trade details." };
+  }
+}
+
+// Auto-download trade details CSV for ALL profiles in profit/loss at Indian market close (3:30 PM IST)
 async function checkEndOfDayAutoCsvDownload(force = false) {
   if (isCsvExporting) {
     return;
@@ -910,12 +1204,11 @@ async function checkEndOfDayAutoCsvDownload(force = false) {
       // Pre-emptively record date to prevent concurrent triggers
       await chrome.storage.local.set({ fg_eod_trades_csv_downloaded_date: dateKey });
 
-      const targetProfile = currentProfile || stored.fg_selected_profile;
-      console.log(`[FinGroww Background] Market closed! Triggering 3:30 PM Trade Details CSV Auto-Download for "${targetProfile}" on ${dateKey}...`);
+      console.log(`[FinGroww Background] Market closed! Triggering 3:30 PM Trade Details CSV Auto-Download for all profiles in profit/loss on ${dateKey}...`);
 
-      const res = await exportProfileTradesCsv({ profile: targetProfile, isAutoEod: true });
+      const res = await exportAllProfilesTradesCsv({ isAutoEod: true, force: force });
       if (res && res.success) {
-        console.log(`[FinGroww Background] Market close CSV auto-download completed: ${res.count} trades in ${res.filename}`);
+        console.log(`[FinGroww Background] Market close CSV auto-download completed: ${res.exportedCount} individual CSV files (${res.totalTradesCount} trades)`);
       } else {
         console.warn(`[FinGroww Background] Market close CSV auto-download skipped or returned:`, res?.error);
       }
@@ -1335,6 +1628,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
   if (request.type === "EXPORT_TRADES_CSV") {
     exportProfileTradesCsv({ profile: request.profile }).then(res => {
+      sendResponse(res);
+    }).catch(err => {
+      sendResponse({ success: false, error: err.message });
+    });
+    return true;
+  }
+
+  if (request.type === "EXPORT_ALL_PROFILES_TRADES_CSV") {
+    exportAllProfilesTradesCsv({ force: request.force === true }).then(res => {
       sendResponse(res);
     }).catch(err => {
       sendResponse({ success: false, error: err.message });

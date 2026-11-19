@@ -22,7 +22,7 @@ function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu("FinGroww")
     .addItem(
-      "🚀 Reset & Load 18 Nov (Fresh Clean Table)",
+      "🚀 Reset & Load Today (Fresh Clean Table)",
       "resetSheetTodayOnly",
     )
     .addItem(

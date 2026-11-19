@@ -94,10 +94,16 @@ A high-frequency Chrome extension (Manifest V3) that docks a professional tradin
   - **📤 Sync to Sheet Now**: One-click manual sync for immediate export with live progress feedback and automatic CORS/redirect fallback.
   - **📥 Daily Ledger CSV**: One-click offline export downloading the complete 13-column profile ledger as a `.csv` file.
 
-### 8. End-of-Day Complete Trade Details CSV Auto-Download (150+ Trades)
-- **Automatic Download at Market Close (3:30 PM IST)**:
-  - At **3:30 PM IST** (Monday through Friday), the extension automatically queries the server for all trade details executed during the day for the selected profile and triggers an immediate automatic CSV file download directly to your computer.
-  - Generates file: `FinGroww_Trades_<Profile>_<YYYY-MM-DD>.csv` (e.g. `FinGroww_Trades_Parth_Gohel_2026-11-18.csv`).
+### 8. End-of-Day Complete Trade Details CSV Auto-Download for All Profiles in Profit or Loss (150+ Trades)
+- **Destination Folder**: **`D:\Tred CSVs`**
+- **Automatic Multi-Profile Download at Market Close (3:30 PM IST)**:
+  - At **3:30 PM IST** (Monday through Friday), the extension automatically identifies **all profiles that are in a loss or profit** (or have active trades today) and triggers an immediate automatic download of **individual CSV files** for each profile directly to your computer.
+  - Automatically exports: `FinGroww_Trades_<Profile>_<YYYY-MM-DD>.csv` for every profile in profit or loss (e.g. `FinGroww_Trades_14K_Traders_2026-11-19.csv`, `FinGroww_Trades_AKS-IntraDay_2026-11-19.csv`, `FinGroww_Trades_Aks-new-55k_2026-11-19.csv`, `FinGroww_Trades_Akshay_19_nov_2026-11-19.csv`, etc.).
+  - Additionally creates a master consolidated CSV: `FinGroww_Trades_ALL_PROFILES_<YYYY-MM-DD>.csv` containing all trades of all profiles combined into one master ledger with trader profiles clearly identified.
+- **Direct Local Exporter & Helper**:
+  - **1-Click Batch Exporter**: Double-click `export_trades_now.bat` anytime to fetch and save all CSVs directly to `D:\Tred CSVs` in 3 seconds!
+  - **Local Companion Server**: Run `start_local_csv_server.bat` to launch the local helper on port 8787 that allows the Chrome extension to write files directly to `D:\Tred CSVs` without browser download dialogs.
+  - **Chrome Download Setting**: In Chrome `chrome://settings/downloads`, set download location to `D:\Tred CSVs` so browser downloads land straight in `D:\Tred CSVs`.
 - **Comprehensive Columns (Zero Truncation even for 150+ or 500+ trades)**:
   - **Trade Identifiers**: Trade ID, Trader Profile, Symbol, Instrument Name, Instrument Type, Side (BUY/SELL), Status (CLOSED / OPEN).
   - **Order & Pricing Metrics**: Quantity, Entry Price (₹), Exit / Current Price (₹), Target Price (₹), Stop Loss (₹).
@@ -105,9 +111,9 @@ A high-frequency Chrome extension (Manifest V3) that docks a professional tradin
   - **Trade Lifecycle & Exit Reason**: Exit Reason (e.g., `TARGET_HIT`, `STOP_LOSS`, `TRAILING_SL`, `BREAKEVEN_STOP_HIT`, `MANUAL_EXIT`, `OPEN_POSITION`), Entry Time, Exit Time, Holding Duration.
   - **Advanced Signals & Rationale**: Strategy Name, Trailing Stop State, Slippage (₹), Allocated Margin / Capital (₹), Expiry Date, and Full Signal Rationale.
 - **Manual 1-Click Export Everywhere**:
-  - **Toolbar Popup**: Dedicated `📥 Export Trades CSV` button on the main view and inside Day-to-Day P&L.
-  - **In-Page Bottom Status Bar Drawer**: One-click `📥 Export Trades CSV` button in the drawer header to download instantly from any web page without opening the popup.
-  - **Auto-Download Toggle**: Switch on/off automatic 3:30 PM CSV download at any time in the popup settings.
+  - **Toolbar Popup**: `📥 Download All Profiles CSVs (Loss & Profit)` button to export all individual CSVs with one click, plus `📑 Selected Profile CSV Only`.
+  - **In-Page Bottom Status Bar Drawer**: Dedicated `📥 All Profiles CSVs` button in the drawer header to download instantly from any web page without opening the popup.
+  - **Auto-Download Toggle**: Switch on/off automatic 3:30 PM multi-profile CSV download at any time in popup settings.
 
 ### 9. Real-Time Synchronization & Stale-While-Revalidate Engine
 - **Fast 3-Second State Polling**: Fetches account metrics, active positions, profiles, and running leaderboards every 3 seconds.

@@ -834,6 +834,26 @@
       box-shadow: 0 0 10px rgba(239, 68, 68, 0.4) !important;
     }
 
+    .fg-btn-export-all-trades {
+      background: rgba(16, 185, 129, 0.15) !important;
+      border: 1px solid rgba(16, 185, 129, 0.4) !important;
+      color: #34d399 !important;
+      padding: 4px 11px !important;
+      border-radius: 6px !important;
+      font-size: 11px !important;
+      font-weight: 600 !important;
+      cursor: pointer !important;
+      transition: all 0.2s ease !important;
+      white-space: nowrap !important;
+    }
+
+    .fg-btn-export-all-trades:hover {
+      background: #059669 !important;
+      border-color: #34d399 !important;
+      color: #ffffff !important;
+      box-shadow: 0 0 10px rgba(16, 185, 129, 0.4) !important;
+    }
+
     .fg-btn-export-trades {
       background: rgba(56, 189, 248, 0.12) !important;
       border: 1px solid rgba(56, 189, 248, 0.35) !important;
@@ -1206,8 +1226,11 @@
           <span class="fg-drawer-meta-pill" id="fg-drawer-equity">💰 Equity: ₹0</span>
         </div>
         <div class="fg-drawer-actions">
+          <button type="button" class="fg-btn-export-all-trades" id="fg-btn-export-all-trades" title="Download individual CSV files for all profiles in profit or loss + master combined CSV">
+            📥 All Profiles CSVs
+          </button>
           <button type="button" class="fg-btn-export-trades" id="fg-btn-export-trades" title="Export all trade details (loss, profit, exit reason) for selected profile as CSV">
-            📥 Export Trades CSV
+            📑 Selected Profile CSV
           </button>
           <button type="button" class="fg-btn-close-all" id="fg-btn-close-all" title="Close all open trades for this profile">
             <span>⚠️</span> Exit All Positions
@@ -1496,12 +1519,34 @@
     });
 
     // Export Selected Profile Trade Details CSV
+    const exportAllTradesBtn = shadowRoot.getElementById("fg-btn-export-all-trades");
+    if (exportAllTradesBtn) {
+      exportAllTradesBtn.addEventListener("click", () => {
+        exportAllTradesBtn.disabled = true;
+        exportAllTradesBtn.textContent = "⏳ Downloading...";
+        showToast("Fetching trade details and generating individual CSV files for all profiles in profit/loss...", false);
+        chrome.runtime.sendMessage({ type: "EXPORT_ALL_PROFILES_TRADES_CSV", force: true }, (res) => {
+          exportAllTradesBtn.disabled = false;
+          if (res && res.success) {
+            exportAllTradesBtn.textContent = `✅ Exported ${res.exportedCount} CSVs!`;
+            showToast(`Downloaded ${res.exportedCount} individual CSV files (${res.totalTradesCount} trades) for all profiles!`, false);
+          } else {
+            exportAllTradesBtn.textContent = "⚠️ Export Failed";
+            showToast(res?.error || "Failed to export all profiles trades CSV", true);
+          }
+          setTimeout(() => {
+            exportAllTradesBtn.textContent = "📥 All Profiles CSVs";
+          }, 3500);
+        });
+      });
+    }
+
     const exportTradesBtn = shadowRoot.getElementById("fg-btn-export-trades");
     if (exportTradesBtn) {
       exportTradesBtn.addEventListener("click", () => {
         const targetProf = currentProfile;
         exportTradesBtn.disabled = true;
-        exportTradesBtn.textContent = "⏳ Fetching 150+ Trades...";
+        exportTradesBtn.textContent = "⏳ Fetching...";
         chrome.runtime.sendMessage({ type: "EXPORT_TRADES_CSV", profile: targetProf }, (res) => {
           exportTradesBtn.disabled = false;
           if (res && res.success) {
@@ -1512,7 +1557,7 @@
             showToast(res?.error || "Failed to export trades CSV", true);
           }
           setTimeout(() => {
-            exportTradesBtn.textContent = "📥 Export Trades CSV";
+            exportTradesBtn.textContent = "📑 Selected Profile CSV";
           }, 3500);
         });
       });

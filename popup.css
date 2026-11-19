@@ -1148,55 +1148,41 @@ input:checked + .slider:before {
   transform: translateX(14px) !important;
 }
 
-.gsheet-actions-row {
+.gsheet-actions-container {
   display: flex;
-  gap: 8px;
+  flex-direction: column;
+  gap: 7px;
   margin-top: 10px;
 }
 
 .btn-gsheet-sync {
-  flex: 1.2;
+  width: 100%;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 7px;
   background: rgba(34, 197, 94, 0.15);
   border: 1px solid rgba(34, 197, 94, 0.4);
   color: var(--green);
   border-radius: 6px;
-  padding: 6px 12px;
+  padding: 8px 14px;
   font-size: 11.5px;
   font-weight: 700;
   cursor: pointer;
   transition: all 0.15s ease;
+  white-space: nowrap;
 }
 
 .btn-gsheet-sync:hover {
   background: var(--green);
   color: #0b0f17;
-  box-shadow: 0 0 10px rgba(34, 197, 94, 0.3);
+  box-shadow: 0 0 12px rgba(34, 197, 94, 0.35);
 }
 
-.btn-export-csv {
-  flex: 0.8;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid var(--border);
-  color: var(--text-main);
-  border-radius: 6px;
-  padding: 6px 12px;
-  font-size: 11.5px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.btn-export-csv:hover {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.2);
+.gsheet-export-subrow {
+  display: flex;
+  gap: 8px;
+  width: 100%;
 }
 
 .btn-export-trades-daily {
@@ -1211,15 +1197,40 @@ input:checked + .slider:before {
   border-radius: 6px;
   padding: 6px 10px;
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
   cursor: pointer;
   transition: all 0.15s ease;
+  white-space: nowrap;
 }
 
 .btn-export-trades-daily:hover {
   background: var(--cyan);
   color: #0b0f17;
   box-shadow: 0 0 10px rgba(56, 189, 248, 0.35);
+}
+
+.btn-export-trades-daily-secondary {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #cbd5e1;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.btn-export-trades-daily-secondary:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.28);
 }
 
 /* End-of-Day Trade Details CSV Card (Bottom next to Open Trades) */
@@ -1298,6 +1309,34 @@ input:checked + .slider:before {
 }
 
 .btn-export-trades-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-export-trades-secondary {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #94a3b8;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-export-trades-secondary:hover {
+  background: rgba(255, 255, 255, 0.09);
+  color: #f1f5f9;
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+.btn-export-trades-secondary:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }

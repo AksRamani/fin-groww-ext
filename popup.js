@@ -156,7 +156,8 @@ function updatePopupUi(payload) {
 
   const charges = Number(acc.total_charges || acc.charges || 0);
   let realized = Number(acc.realized_pnl !== undefined ? acc.realized_pnl : 0);
-  if (realized === 0 && (openPositions.length === 0 || !acc.unrealized_pnl)) {
+  const openCount = (cachedPositions && Array.isArray(cachedPositions)) ? cachedPositions.length : 0;
+  if (realized === 0 && (openCount === 0 || !acc.unrealized_pnl)) {
     realized = totalPnl;
   }
 
@@ -1052,6 +1053,19 @@ async function directFetchAndExportCsv(targetProfile) {
   const sanitizedProfile = targetProfile.replace(/[^a-zA-Z0-9_-]/g, "_");
   const filename = `FinGroww_Trades_${sanitizedProfile}_${todayIso}.csv`;
 
+  // Attempt direct write to D:\Tred CSVs if local helper is listening
+  try {
+    fetch("http://127.0.0.1:8787/api/save-trades-csv", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        filename: filename,
+        csvContent: csvContent,
+        targetDir: "D:\\Tred CSVs"
+      })
+    }).catch(() => {});
+  } catch (e) {}
+
   triggerBrowserDownload(csvContent, filename);
 
   if (alertBox) {
@@ -1082,14 +1096,14 @@ async function exportSelectedProfileTradesCsv() {
     if (btn) {
       btn.disabled = loading;
       btn.innerHTML = loading
-        ? `<span>⏳</span> Fetching 150+ Trades...`
-        : `<span id="exportTradesIcon">📥</span> Export Trade Details CSV`;
+        ? `<span>⏳</span> Fetching Trades...`
+        : `<span id="exportTradesIcon">📑</span> Selected Profile CSV Only`;
     }
     if (btnDaily) {
       btnDaily.disabled = loading;
       btnDaily.innerHTML = loading
         ? `<span>⏳</span> Fetching...`
-        : `<span>📑</span> Export Trades CSV`;
+        : `<span>📑</span> Selected Profile CSV`;
     }
   };
 
@@ -1146,16 +1160,159 @@ async function exportSelectedProfileTradesCsv() {
   }
 }
 
+// Direct client fetch fallback to export all profit/loss profiles CSVs if background is asleep
+async function directFetchAndExportAllProfilesCsv() {
+  const alertBox = document.getElementById("tradesExportAlertMsg");
+  const hosts = [
+    "https://fingroww-trading.onrender.com",
+    "http://127.0.0.1:8787",
+  ];
+  let profilesList = [];
+
+  for (const host of hosts) {
+    try {
+      const res = await fetch(`${host}/api/paper/profiles`).then((r) =>
+        r.ok ? r.json() : null,
+      );
+      if (res && Array.isArray(res.profiles) && res.profiles.length > 0) {
+        profilesList = res.profiles;
+        break;
+      }
+    } catch (e) {}
+  }
+
+  const activeProfiles = profilesList.filter((p) => {
+    const pnl = Number(p.net_pnl || 0);
+    const trades = Number(p.total_trades || 0);
+    const u = p.user_name || p.name;
+    return (
+      u &&
+      !u.includes("ALL USERS") &&
+      (Math.abs(pnl) > 0.001 || trades > 0)
+    );
+  });
+
+  if (activeProfiles.length === 0) {
+    if (alertBox) {
+      alertBox.className = "trades-export-msg error";
+      alertBox.textContent = "No profiles found in profit or loss with trades today.";
+      alertBox.style.display = "block";
+    }
+    return;
+  }
+
+  let downloadedCount = 0;
+  for (let i = 0; i < activeProfiles.length; i++) {
+    const prof = activeProfiles[i];
+    await directFetchAndExportCsv(prof.user_name || prof.name);
+    downloadedCount++;
+    await new Promise((r) => setTimeout(r, 400));
+  }
+
+  if (alertBox) {
+    alertBox.className = "trades-export-msg success";
+    alertBox.textContent = `✅ Successfully downloaded individual CSV files for ${downloadedCount} profiles!`;
+    alertBox.style.display = "block";
+  }
+}
+
+// Controller to export individual CSV files for ALL profiles in profit or loss
+async function exportAllProfilesTradesCsvAction() {
+  const btnAll = document.getElementById("btnExportAllProfilesCsv");
+  const btnDailyAll = document.getElementById("btnExportAllTradesCsvDaily");
+  const alertBox = document.getElementById("tradesExportAlertMsg");
+
+  const setButtonsLoading = (loading) => {
+    if (btnAll) {
+      btnAll.disabled = loading;
+      btnAll.innerHTML = loading
+        ? `<span>⏳</span> Downloading All Profiles CSVs...`
+        : `<span id="exportAllTradesIcon">📥</span> Download All Profiles CSVs (Loss & Profit)`;
+    }
+    if (btnDailyAll) {
+      btnDailyAll.disabled = loading;
+      btnDailyAll.innerHTML = loading
+        ? `<span>⏳</span> Downloading...`
+        : `<span>📥</span> All Profiles CSVs`;
+    }
+  };
+
+  setButtonsLoading(true);
+  if (alertBox) {
+    alertBox.className = "trades-export-msg";
+    alertBox.textContent =
+      "Fetching trade details and generating individual CSV files for all profiles in profit/loss...";
+    alertBox.style.display = "block";
+  }
+
+  try {
+    chrome.runtime.sendMessage(
+      { type: "EXPORT_ALL_PROFILES_TRADES_CSV", force: true },
+      (res) => {
+        setButtonsLoading(false);
+        if (chrome.runtime.lastError) {
+          console.warn(
+            "[FinGroww Popup] Background error:",
+            chrome.runtime.lastError,
+          );
+          directFetchAndExportAllProfilesCsv();
+          return;
+        }
+
+        if (res && res.success) {
+          if (alertBox) {
+            alertBox.className = "trades-export-msg success";
+            alertBox.textContent = `✅ ${res.message || `Successfully downloaded ${res.exportedCount} individual CSV files (${res.totalTradesCount} trades)!`}`;
+            alertBox.style.display = "block";
+          }
+          // If background downloads were not triggered, fallback to browser download
+          if (Array.isArray(res.exportedFiles)) {
+            res.exportedFiles.forEach((f, idx) => {
+              if (
+                f.csvContent &&
+                (!f.downloadId || typeof chrome.downloads === "undefined")
+              ) {
+                setTimeout(
+                  () => triggerBrowserDownload(f.csvContent, f.filename),
+                  idx * 400,
+                );
+              }
+            });
+          }
+        } else {
+          if (alertBox) {
+            alertBox.className = "trades-export-msg error";
+            alertBox.textContent = `⚠️ ${res?.error || "Failed to download trades CSV files."}`;
+            alertBox.style.display = "block";
+          }
+        }
+      },
+    );
+  } catch (err) {
+    setButtonsLoading(false);
+    console.error(
+      "[FinGroww Popup] exportAllProfilesTradesCsvAction error:",
+      err,
+    );
+    directFetchAndExportAllProfilesCsv();
+  }
+}
+
 // Trade Details CSV Export UI Controllers
 function setupTradesExportControls() {
   const btn = document.getElementById("btnExportTradesCsv");
   const btnDaily = document.getElementById("btnExportTradesCsvDaily");
+  const btnAll = document.getElementById("btnExportAllProfilesCsv");
+  const btnDailyAll = document.getElementById("btnExportAllTradesCsvDaily");
   const chkAuto = document.getElementById("chkAutoDownloadTradesCsv");
   const lastTime = document.getElementById("tradesLastDownloadTime");
 
   if (btn) btn.addEventListener("click", exportSelectedProfileTradesCsv);
   if (btnDaily)
     btnDaily.addEventListener("click", exportSelectedProfileTradesCsv);
+  if (btnAll) btnAll.addEventListener("click", exportAllProfilesTradesCsvAction);
+  if (btnDailyAll)
+    btnDailyAll.addEventListener("click", exportAllProfilesTradesCsvAction);
 
   if (chkAuto) {
     chrome.storage.local.get(
@@ -1167,7 +1324,7 @@ function setupTradesExportControls() {
       (res) => {
         chkAuto.checked = res.fg_auto_download_csv_eod !== false;
         if (lastTime && res.fg_eod_csv_last_time) {
-          lastTime.textContent = `Last: ${res.fg_eod_csv_last_time}`;
+          lastTime.textContent = `Last: ${res.fg_eod_csv_last_time} (${res.fg_eod_csv_last_msg || "Completed"})`;
         }
       },
     );

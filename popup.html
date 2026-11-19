@@ -118,18 +118,22 @@
         <span class="trades-export-icon">📑</span>
         <div class="trades-export-title-group">
           <div class="trades-export-title">
-            <span>All Trade Details CSV</span>
+            <span>Trade Details CSV Auto-Download</span>
             <span id="tradesExportCountBadge" class="count-pill">-- Trades</span>
+            <span class="path-pill" style="font-family:monospace;font-size:10px;background:rgba(255,255,255,0.06);padding:2px 6px;border-radius:4px;color:#38bdf8;" title="Target Directory">📁 D:\Tred CSVs</span>
           </div>
           <div class="trades-export-desc" id="tradesExportStatusDesc">
-            Download complete trade log (P&L, exit reasons, prices, duration) for selected profile
+            Download individual CSV files with all trade details for all profiles in profit or loss
           </div>
         </div>
       </div>
 
-      <div class="trades-export-action-row">
-        <button type="button" id="btnExportTradesCsv" class="btn-export-trades-primary" title="Export all trade details for selected profile to CSV now">
-          <span id="exportTradesIcon">📥</span> Export Trade Details CSV
+      <div class="trades-export-action-row" style="display: flex; flex-direction: column; gap: 7px;">
+        <button type="button" id="btnExportAllProfilesCsv" class="btn-export-trades-primary" title="Download individual CSV files for all profiles in profit or loss + master combined CSV">
+          <span id="exportAllTradesIcon">📥</span> Download All Profiles CSVs (Loss & Profit)
+        </button>
+        <button type="button" id="btnExportTradesCsv" class="btn-export-trades-secondary" title="Export all trade details for selected profile only">
+          <span id="exportTradesIcon">📑</span> Selected Profile CSV Only
         </button>
       </div>
 
@@ -139,10 +143,10 @@
             <span>Auto-download at Market Close (3:30 PM IST)</span>
           </div>
           <div class="setting-desc" id="tradesLastDownloadTime">
-            Automatically saves CSV when market closes
+            Automatically saves individual CSVs for all profiles in profit or loss
           </div>
         </div>
-        <label class="switch switch-sm" title="Automatically download trade details CSV after market closes at 3:30 PM IST">
+        <label class="switch switch-sm" title="Automatically download trade details CSV for all profiles in profit or loss after market closes at 3:30 PM IST">
           <input type="checkbox" id="chkAutoDownloadTradesCsv" checked>
           <span class="slider round"></span>
         </label>
@@ -235,16 +239,18 @@
         </div>
       </div>
 
-      <div class="gsheet-actions-row">
+      <div class="gsheet-actions-container">
         <button type="button" id="btnSyncGsheetNow" class="btn-gsheet-sync" title="Sync Today's Closing P&L to Google Sheet">
           <span id="gsheetSyncIcon">📤</span> Sync to Sheet Now
         </button>
-        <button type="button" id="btnExportTradesCsvDaily" class="btn-export-trades-daily" title="Export all trade details for selected profile to CSV">
-          <span>📑</span> Export Trades CSV
-        </button>
-        <button type="button" id="btnExportCsv" class="btn-export-csv" title="Download Full Daily P&L Ledger as CSV file">
-          <span>📥</span> Daily Ledger
-        </button>
+        <div class="gsheet-export-subrow">
+          <button type="button" id="btnExportAllTradesCsvDaily" class="btn-export-trades-daily" title="Download individual CSV files for all profiles in profit/loss to D:\Tred CSVs">
+            <span>📥</span> All Profiles CSVs
+          </button>
+          <button type="button" id="btnExportTradesCsvDaily" class="btn-export-trades-daily-secondary" title="Export trade details for selected profile to CSV">
+            <span>📑</span> Selected Profile CSV
+          </button>
+        </div>
       </div>
       <div id="gsheetLastSyncMsg" class="gsheet-last-sync-msg"></div>
     </section>
