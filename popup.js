@@ -279,6 +279,13 @@ function renderPositionsList(positions, flashMap) {
             : "";
       const ltp = (Number(pos.current_price) || 0).toFixed(2);
       const entry = (Number(pos.entry_price) || 0).toFixed(2);
+      const targetVal =
+        Number(pos.target_price) > 0
+          ? `₹${Number(pos.target_price).toFixed(2)}`
+          : Number(pos.target) > 0
+            ? `₹${Number(pos.target).toFixed(2)}`
+            : "--";
+      const targetColor = targetVal !== "--" ? "var(--green)" : "var(--text-dim)";
 
       let pct = Number(pos.pnl_pct);
       if (isNaN(pct) || pct === undefined || pct === null) {
@@ -304,7 +311,10 @@ function renderPositionsList(positions, flashMap) {
           <div class="pos-ltp ${flashClass}">₹${ltp}</div>
         </div>
         <div class="pos-body">
-          <div>Entry: ₹${entry} • Qty: ${pos.quantity || 0}</div>
+          <div class="pos-meta-col">
+            <div>Entry: ₹${entry}</div>
+            <div>Target: <span style="color:${targetColor};font-weight:700;">${targetVal}</span></div>
+          </div>
           <div style="display:flex;align-items:center;gap:8px;">
             <span class="pos-pnl ${pnlClass}">${pnl > 0 ? "+" : ""}${formatInr(pnl)} (${pctFormatted})</span>
             <button type="button" class="btn-pos-exit" data-trade-id="${pos.trade_id}" data-symbol="${pos.symbol}" title="Close this position">✕ Exit</button>
@@ -1687,6 +1697,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       "fg_latest_data",
       "fg_selected_profile",
       "fg_show_after_hours",
+      "fg_pill_hidden",
       "fg_daily_pnl_history",
       "fg_profiles_cache",
     ]);
@@ -1712,6 +1723,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     renderDailyPnlView();
+
+    const toggleShowPill = document.getElementById("toggleShowPill");
+    if (toggleShowPill) {
+      toggleShowPill.checked = stored?.fg_pill_hidden !== true;
+      toggleShowPill.addEventListener("change", (e) => {
+        chrome.storage.local.set({ fg_pill_hidden: !e.target.checked });
+      });
+    }
 
     const toggleShow = document.getElementById("toggleShowAfterHours");
     if (toggleShow) {
@@ -1838,6 +1857,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         const toggleShow = document.getElementById("toggleShowAfterHours");
         if (toggleShow)
           toggleShow.checked = changes.fg_show_after_hours.newValue === true;
+      }
+      if (changes.fg_pill_hidden !== undefined) {
+        const toggleShowPill = document.getElementById("toggleShowPill");
+        if (toggleShowPill)
+          toggleShowPill.checked = changes.fg_pill_hidden.newValue !== true;
       }
       if (changes.fg_selected_profile) {
         const newProf = changes.fg_selected_profile.newValue;

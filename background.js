@@ -477,10 +477,13 @@ async function performMasterSync() {
       }
     }
 
-    const totalPnl = Number(account.total_pnl) || 0;
+    let totalPnl = Number(account.total_pnl !== undefined ? account.total_pnl : (account.net_pnl !== undefined ? account.net_pnl : 0)) || 0;
 
     // Find current profile in leaderboard for complete win/loss trade analytics
     const currentLb = (leaderboard || []).find(p => (p.user_name || p.name) === currentProfile);
+    if (totalPnl === 0 && currentLb) {
+      totalPnl = Number(currentLb.net_pnl !== undefined ? currentLb.net_pnl : currentLb.total_pnl) || 0;
+    }
 
     // Update daily P&L for current user with full dynamic stats
     updateDailyPnlRecord(
@@ -1470,22 +1473,44 @@ async function triggerLiveMarketTick() {
   }
 }
 
+// Format P&L for Extension Toolbar Badge (e.g. 1k, 0.5k, 1m)
+function formatBadgePnl(pnl) {
+  const num = Number(pnl);
+  if (isNaN(num) || Math.abs(num) < 0.5) return "0";
+  const sign = num < 0 ? "-" : "";
+  const abs = Math.abs(num);
+
+  if (abs >= 1000000) {
+    const m = abs / 1000000;
+    const str = m >= 10 ? Math.round(m) : m.toFixed(1).replace(/\.0$/, "");
+    return `${sign}${str}m`;
+  }
+  if (abs >= 1000) {
+    const k = abs / 1000;
+    const str = k >= 10 ? Math.round(k) : k.toFixed(1).replace(/\.0$/, "");
+    return `${sign}${str}k`;
+  }
+  if (abs >= 100) {
+    const str = (abs / 1000).toFixed(1).replace(/\.0$/, "");
+    return `${sign}${str}k`;
+  }
+  return `${sign}${Math.round(abs)}`;
+}
+
 // Update Extension Toolbar Icon Badge
 function updateBadge(positionsCount, totalPnl, profile) {
   try {
-    if (positionsCount > 0) {
-      chrome.action.setBadgeText({ text: String(positionsCount) });
-      chrome.action.setBadgeBackgroundColor({
-        color: totalPnl >= 0 ? "#22c55e" : "#ef4444"
-      });
-    } else {
-      chrome.action.setBadgeText({ text: "0" });
-      chrome.action.setBadgeBackgroundColor({ color: "#64748b" });
-    }
+    const pnlNum = Number(totalPnl) || 0;
+    const badgeText = formatBadgePnl(pnlNum);
 
-    const pnlSign = totalPnl >= 0 ? "+" : "";
+    chrome.action.setBadgeText({ text: badgeText });
+    chrome.action.setBadgeBackgroundColor({
+      color: pnlNum > 0 ? "#22c55e" : pnlNum < 0 ? "#ef4444" : "#64748b"
+    });
+
+    const pnlSign = pnlNum >= 0 ? "+" : "";
     chrome.action.setTitle({
-      title: `FinGroww Status: [${profile}]\nOpen: ${positionsCount} | P&L: ${pnlSign}₹${totalPnl.toFixed(2)}`
+      title: `FinGroww Status: [${profile || "Default"}]\nP&L: ${pnlSign}₹${pnlNum.toFixed(2)} | Open: ${positionsCount || 0}`
     });
   } catch (e) {}
 }

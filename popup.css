@@ -499,6 +499,13 @@ body {
   font-family: var(--font-mono);
 }
 
+.pos-meta-col {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 1.25;
+}
+
 .pos-pnl {
   font-size: 12px;
   font-weight: 800;

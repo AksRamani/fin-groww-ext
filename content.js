@@ -104,6 +104,23 @@
       transition: none !important;
     }
 
+    #fg-pill-hide-btn {
+      opacity: 0.55 !important;
+      cursor: pointer !important;
+      margin-left: 2px !important;
+      font-size: 11px !important;
+      padding: 1px 4px !important;
+      border-radius: 4px !important;
+      transition: all 0.15s ease !important;
+      line-height: 1 !important;
+    }
+
+    #fg-pill-hide-btn:hover {
+      opacity: 1 !important;
+      color: #f87171 !important;
+      background: rgba(239, 68, 68, 0.2) !important;
+    }
+
     /* Left Group: Profile selector, Overall P&L, Running Rank */
     .fg-bar-left {
       display: flex !important;
@@ -1012,6 +1029,10 @@
   let shadowRoot = null;
   let hostEl = null;
   let showAfterHours = false;
+  let isPillHidden = false;
+  try {
+    isPillHidden = localStorage.getItem("fg_pill_hidden") === "true";
+  } catch (e) {}
   let serverMarketOpen = null;
   let cachedDailyHistory = null;
   function filterRealHistory(history) {
@@ -1072,7 +1093,7 @@
     }
   }
 
-  // Update visibility: hides both status bar & pill when Indian market is closed unless user enabled showAfterHours
+  // Update visibility: hides both status bar & pill when Indian market is closed unless user enabled showAfterHours, or when pill is hidden
   function updateMarketVisibility() {
     if (!hostEl) return;
     const localOpen = isIndianMarketOpenNow();
@@ -1080,14 +1101,17 @@
     // If local clock says market is closed (>= 3:30 PM, < 9:00 AM, or weekend), it IS closed.
     // During trading hours (9:00 AM - 3:30 PM), if backend explicitly reports closed (holiday), it also closes.
     const isMarketOpen = localOpen && (serverMarketOpen !== false);
-    const shouldDisplay = isMarketOpen || showAfterHours;
+    const marketAllowed = isMarketOpen || showAfterHours;
+    const shouldDisplay = marketAllowed && !isPillHidden;
 
     const bar = shadowRoot?.getElementById("fg-ide-statusbar");
     const restoreBtn = shadowRoot?.getElementById("fg-ide-restore-btn");
     const drawer = shadowRoot?.getElementById("fg-ide-drawer");
 
     if (!shouldDisplay) {
-      hostEl.style.setProperty("display", "none", "important");
+      if (!marketAllowed) {
+        hostEl.style.setProperty("display", "none", "important");
+      }
       if (bar) bar.style.setProperty("display", "none", "important");
       if (restoreBtn) restoreBtn.style.setProperty("display", "none", "important");
       if (drawer) drawer.style.setProperty("display", "none", "important");
@@ -1333,8 +1357,8 @@
     // 6. Floating Restore Badge (Draggable anywhere in the tab)
     const restoreBtn = document.createElement("button");
     restoreBtn.id = "fg-ide-restore-btn";
-    restoreBtn.innerHTML = `<span style="opacity:0.6;font-size:10px;cursor:grab;" title="Drag to move">⠿</span> <span>(Alt+S)</span> <span id="fg-restore-pnl" style="font-size:11px;font-weight:800;">P&L: ₹0</span> <span>▲</span>`;
-    restoreBtn.title = "Drag to move • Click or press Alt+S to restore status bar";
+    restoreBtn.innerHTML = `<span style="opacity:0.6;font-size:10px;cursor:grab;" title="Drag to move">⠿</span> <span>(Alt+S)</span> <span id="fg-restore-pnl" style="font-size:11px;font-weight:800;">P&L: ₹0</span> <span>▲</span> <span id="fg-pill-hide-btn" title="Hide floating pill (Press Alt+A to restore)">✕</span>`;
+    restoreBtn.title = "Drag to move • Click or Alt+S to restore status bar • Click ✕ or Alt+A to hide";
 
     // Restore saved position if present
     try {
@@ -1485,6 +1509,7 @@
 
     // Helper to toggle and persist minimized state across tabs and refreshes
     const setMinimizedState = (minimized) => {
+      if (isPillHidden && !minimized) return; // Cannot show status bar if pill is hidden
       try {
         localStorage.setItem("fg_is_minimized", minimized ? "true" : "false");
       } catch (e) {}
@@ -1500,6 +1525,41 @@
         bar.classList.remove("fg-minimized");
       }
       updateMarketVisibility();
+    };
+
+    // Helper to toggle master hide/show state of floating pill & status bar (Alt + A)
+    const togglePillHideState = (forceState) => {
+      if (typeof forceState === "boolean") {
+        isPillHidden = forceState;
+      } else {
+        isPillHidden = !isPillHidden;
+      }
+
+      try {
+        localStorage.setItem("fg_pill_hidden", isPillHidden ? "true" : "false");
+      } catch (e) {}
+      chrome.storage.local.set({ fg_pill_hidden: isPillHidden });
+
+      if (!isPillHidden) {
+        // When showing/restoring via Alt+A, show the pill first (minimized state)
+        try {
+          localStorage.setItem("fg_is_minimized", "true");
+        } catch (e) {}
+        chrome.storage.local.set({ fg_is_minimized: true });
+        bar.classList.add("fg-minimized");
+        drawer.classList.remove("fg-drawer-open");
+        isDrawerOpen = false;
+        const icon = shadowRoot.getElementById("fg-drawer-icon");
+        if (icon) icon.textContent = "▲";
+      }
+
+      updateMarketVisibility();
+
+      if (isPillHidden) {
+        showToast("Trading Pill & Status Bar hidden (Press Alt+A to restore)", false);
+      } else {
+        showToast("Trading Pill restored (Click or Alt+S for status bar)", true);
+      }
     };
 
     // Minimize Button ("—"): Hides the status bar and displays the small floating restore pill
@@ -1573,6 +1633,7 @@
       let initialTop = 0;
 
       const onPointerDown = (e) => {
+        if (e.target && e.target.id === "fg-pill-hide-btn") return;
         if (e.button !== undefined && e.button !== 0) return;
         isDragging = true;
         hasMoved = false;
@@ -1637,6 +1698,15 @@
 
       pill.addEventListener("pointerdown", onPointerDown);
 
+      const pillHideBtn = pill.querySelector("#fg-pill-hide-btn");
+      if (pillHideBtn) {
+        pillHideBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          togglePillHideState(true);
+        });
+      }
+
       window.addEventListener("resize", () => {
         const rect = pill.getBoundingClientRect();
         if (rect.left > 0 || rect.top > 0) {
@@ -1655,9 +1725,16 @@
       setMinimizedState(false);
     });
 
-    // Keyboard Shortcut (Alt + S)
+    // Keyboard Shortcut (Alt + A to hide/show pill & status bar, Alt + S to toggle bar/pill)
     window.addEventListener("keydown", (e) => {
-      if (e.altKey && (e.key === "s" || e.key === "S")) {
+      if (e.altKey && !e.ctrlKey && (e.key === "a" || e.key === "A")) {
+        e.preventDefault();
+        togglePillHideState();
+        return;
+      }
+
+      if (e.altKey && !e.ctrlKey && (e.key === "s" || e.key === "S")) {
+        if (isPillHidden) return; // Status bar can only be shown if pill is visible
         const isMin = bar.classList.contains("fg-minimized");
         setMinimizedState(!isMin);
       }
@@ -2558,6 +2635,13 @@
         showAfterHours = changes.fg_show_after_hours.newValue === true;
         updateMarketVisibility();
       }
+      if (changes.fg_pill_hidden !== undefined) {
+        isPillHidden = changes.fg_pill_hidden.newValue === true;
+        try {
+          localStorage.setItem("fg_pill_hidden", isPillHidden ? "true" : "false");
+        } catch (e) {}
+        updateMarketVisibility();
+      }
       if (changes.fg_selected_profile) {
         const newProf = changes.fg_selected_profile.newValue;
         if (newProf && newProf !== currentProfile) {
@@ -2645,10 +2729,17 @@
         "fg_selected_profile",
         "fg_is_minimized",
         "fg_pill_pos",
+        "fg_pill_hidden",
         "fg_show_after_hours",
         "fg_daily_pnl_history",
         "fg_profiles_cache"
       ]);
+      if (stored.fg_pill_hidden !== undefined) {
+        isPillHidden = stored.fg_pill_hidden === true;
+        try {
+          localStorage.setItem("fg_pill_hidden", isPillHidden ? "true" : "false");
+        } catch (e) {}
+      }
       if (stored.fg_profiles_cache && Array.isArray(stored.fg_profiles_cache) && stored.fg_profiles_cache.length > 0) {
         profilesList = stored.fg_profiles_cache;
         renderProfileSelectors();
