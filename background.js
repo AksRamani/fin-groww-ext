@@ -242,6 +242,13 @@ async function apiFetch(path, options = {}, timeoutMs = 12000) {
   return null;
 }
 
+let showAfterHours = false;
+chrome.storage.local.get(["fg_show_after_hours"]).then(res => {
+  if (res && res.fg_show_after_hours !== undefined) {
+    showAfterHours = res.fg_show_after_hours === true;
+  }
+}).catch(() => {});
+
 // Calculate Indian market hours locally (IST: Mon-Fri 9:00 AM - 3:30 PM)
 function isIndianMarketOpenNow() {
   try {
@@ -1500,6 +1507,20 @@ function formatBadgePnl(pnl) {
 // Update Extension Toolbar Icon Badge
 function updateBadge(positionsCount, totalPnl, profile) {
   try {
+    const isMarketOpen = isIndianMarketOpenNow();
+    const shouldDisplay = isMarketOpen || showAfterHours;
+
+    // After 3:30 PM IST (market close), hide toolbar badge unless showAfterHours is enabled
+    if (!shouldDisplay) {
+      chrome.action.setBadgeText({ text: "" });
+      const pnlNum = Number(totalPnl) || 0;
+      const pnlSign = pnlNum >= 0 ? "+" : "";
+      chrome.action.setTitle({
+        title: `FinGroww Status: [${profile || "Default"}] (Market Closed)\nP&L: ${pnlSign}₹${pnlNum.toFixed(2)} | Open: ${positionsCount || 0}`
+      });
+      return;
+    }
+
     const pnlNum = Number(totalPnl) || 0;
     const badgeText = formatBadgePnl(pnlNum);
 
@@ -1679,13 +1700,19 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
 // When profile is changed anywhere in storage, immediately sync
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === "local" && changes.fg_selected_profile) {
-    const newProfile = changes.fg_selected_profile.newValue;
-    if (newProfile && newProfile !== currentProfile) {
-      currentProfile = newProfile;
-      isSyncing = false;
+  if (area === "local") {
+    if (changes.fg_selected_profile) {
+      const newProfile = changes.fg_selected_profile.newValue;
+      if (newProfile && newProfile !== currentProfile) {
+        currentProfile = newProfile;
+        isSyncing = false;
+        performMasterSync();
+        triggerLiveMarketTick();
+      }
+    }
+    if (changes.fg_show_after_hours !== undefined) {
+      showAfterHours = changes.fg_show_after_hours.newValue === true;
       performMasterSync();
-      triggerLiveMarketTick();
     }
   }
 });
