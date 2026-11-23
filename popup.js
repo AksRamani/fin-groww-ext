@@ -3,6 +3,13 @@
  * Real-time synchronization with background service worker & open tabs
  */
 
+const API_HOSTS = [
+  "https://api.fingroww.tech",
+  "https://fingroww-trading-y3na.onrender.com",
+  "http://127.0.0.1:8787",
+  "https://fingroww-trading.onrender.com"
+];
+
 let currentProfile = "";
 let previousPrices = {};
 let cachedAccount = {};
@@ -898,10 +905,7 @@ function triggerBrowserDownload(csvText, filename) {
 // Direct client fetch fallback to export trades CSV if background worker is asleep
 async function directFetchAndExportCsv(targetProfile) {
   const alertBox = document.getElementById("tradesExportAlertMsg");
-  const hosts = [
-    "https://fingroww-trading.onrender.com",
-    "http://127.0.0.1:8787",
-  ];
+  const hosts = API_HOSTS;
   let tradesData = null;
   let sessionData = null;
 
@@ -1173,10 +1177,7 @@ async function exportSelectedProfileTradesCsv() {
 // Direct client fetch fallback to export all profit/loss profiles CSVs if background is asleep
 async function directFetchAndExportAllProfilesCsv() {
   const alertBox = document.getElementById("tradesExportAlertMsg");
-  const hosts = [
-    "https://fingroww-trading.onrender.com",
-    "http://127.0.0.1:8787",
-  ];
+  const hosts = API_HOSTS;
   let profilesList = [];
 
   for (const host of hosts) {
@@ -1476,7 +1477,7 @@ function setupGsheetSyncControls() {
     ).sort((a, b) => a.localeCompare(b));
 
     // Fetch live session states and real broker charges & P&L for all profiles
-    const hosts = ["https://fingroww-trading.onrender.com", "http://127.0.0.1:8787"];
+    const hosts = API_HOSTS;
     const activeUsers = Object.keys(historyByUser).filter((u) => !u.includes("ALL USERS"));
     const profileSessionMap = {};
 
@@ -1794,10 +1795,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // Fetch live profiles directly from API
   async function fetchLiveProfiles() {
-    const hosts = [
-      "https://fingroww-trading.onrender.com",
-      "http://127.0.0.1:8787",
-    ];
+    const hosts = API_HOSTS;
     for (const host of hosts) {
       try {
         const res = await fetch(`${host}/api/paper/profiles`);
@@ -1819,10 +1817,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Directly fetch session data for selected profile from server
   async function fetchAndApplyProfileSession(profileName) {
     if (!profileName) return;
-    const hosts = [
-      "https://fingroww-trading.onrender.com",
-      "http://127.0.0.1:8787",
-    ];
+    const hosts = API_HOSTS;
     for (const host of hosts) {
       try {
         const res = await fetch(

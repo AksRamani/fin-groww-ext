@@ -12,6 +12,8 @@
     "<all_urls>",
     "http://*/*",
     "https://*/*",
+    "https://api.fingroww.tech/*",
+    "https://fingroww-trading-y3na.onrender.com/*",
     "https://fingroww-trading.onrender.com/*",
     "http://127.0.0.1:8787/*",
     "http://localhost:8787/*"

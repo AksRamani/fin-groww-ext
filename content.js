@@ -1725,20 +1725,34 @@
       setMinimizedState(false);
     });
 
-    // Keyboard Shortcut (Alt + A to hide/show pill & status bar, Alt + S to toggle bar/pill)
-    window.addEventListener("keydown", (e) => {
-      if (e.altKey && !e.ctrlKey && (e.key === "a" || e.key === "A")) {
-        e.preventDefault();
-        togglePillHideState();
-        return;
-      }
+    // Keyboard Shortcuts:
+    // Alt + S: Toggle Bottom Status Bar (Hide/Show Bar)
+    // Alt + A: Toggle Floating Pill (Hide/Show Pill)
+    window.addEventListener(
+      "keydown",
+      (e) => {
+        if (!e.altKey || e.ctrlKey || e.metaKey) return;
 
-      if (e.altKey && !e.ctrlKey && (e.key === "s" || e.key === "S")) {
-        if (isPillHidden) return; // Status bar can only be shown if pill is visible
-        const isMin = bar.classList.contains("fg-minimized");
-        setMinimizedState(!isMin);
-      }
-    });
+        const isKeyS = e.key === "s" || e.key === "S" || e.code === "KeyS";
+        const isKeyA = e.key === "a" || e.key === "A" || e.code === "KeyA";
+
+        if (isKeyS) {
+          e.preventDefault();
+          e.stopPropagation();
+          const isMin = bar.classList.contains("fg-minimized");
+          setMinimizedState(!isMin);
+          return;
+        }
+
+        if (isKeyA) {
+          e.preventDefault();
+          e.stopPropagation();
+          togglePillHideState();
+          return;
+        }
+      },
+      true // Capture phase ensures web charts don't swallow the shortcut
+    );
 
     // Drag-to-scroll ticker
     const tickerTrack = shadowRoot.getElementById("fg-ticker-track");
@@ -1786,7 +1800,12 @@
   // Directly fetch session data for selected profile from server
   async function fetchAndApplyProfileSession(profileName) {
     if (!profileName) return;
-    const hosts = ["https://fingroww-trading.onrender.com", "http://127.0.0.1:8787"];
+    const hosts = [
+      "https://api.fingroww.tech",
+      "https://fingroww-trading-y3na.onrender.com",
+      "http://127.0.0.1:8787",
+      "https://fingroww-trading.onrender.com"
+    ];
     for (const host of hosts) {
       try {
         const res = await fetch(`${host}/api/paper/session/state?user=${encodeURIComponent(profileName)}`);
@@ -1885,7 +1904,12 @@
 
   // Fetch real server profiles directly from web API to guarantee all 12 profiles appear
   async function fetchLiveProfilesList() {
-    const hosts = ["https://fingroww-trading.onrender.com", "http://127.0.0.1:8787"];
+    const hosts = [
+      "https://api.fingroww.tech",
+      "https://fingroww-trading-y3na.onrender.com",
+      "http://127.0.0.1:8787",
+      "https://fingroww-trading.onrender.com"
+    ];
     for (const host of hosts) {
       try {
         const res = await fetch(`${host}/api/paper/profiles`, { headers: { "Content-Type": "application/json" } });

@@ -4,8 +4,12 @@
  * Implements Stale-While-Revalidate caching: NEVER overwrites valid data with empty/stale defaults
  */
 
-const API_BASE = "https://fingroww-trading.onrender.com";
+const API_BASE = "https://api.fingroww.tech";
+const FALLBACK_API_BASE = "https://fingroww-trading-y3na.onrender.com";
 const LOCAL_API_BASE = "http://127.0.0.1:8787";
+const LEGACY_API_BASE = "https://fingroww-trading.onrender.com";
+
+const API_HOSTS = [API_BASE, FALLBACK_API_BASE, LOCAL_API_BASE, LEGACY_API_BASE];
 
 let currentProfile = "Aks-new-55k";
 let isSyncing = false;
@@ -216,9 +220,9 @@ function sortPositions(positions) {
   });
 }
 
-// Dual-host resilient fetch
+// Multi-host resilient fetch with fast fallback
 async function apiFetch(path, options = {}, timeoutMs = 12000) {
-  const hosts = [API_BASE, LOCAL_API_BASE];
+  const hosts = API_HOSTS;
   for (const host of hosts) {
     try {
       const controller = new AbortController();
@@ -397,7 +401,19 @@ async function performMasterSync() {
     }
 
     // Leaderboard: retain all real traders from server (include RUNNING, PAUSED, IDLE, etc.)
-    const rawLb = leaderboardData?.leaderboard || [];
+    const rawLb = leaderboardData?.leaderboard || (Array.isArray(leaderboardData) ? leaderboardData : []);
+
+    // If currentProfile is obsolete and no longer in profiles list, auto-switch to an active profile
+    const profileNames = profilesList.map(p => typeof p === "string" ? p : (p.user_name || p.name));
+    if (profileNames.length > 0 && !profileNames.includes(currentProfile)) {
+      const preferred = ["Aks-new-55k", "AKS-IntraDay", "Akshay", "14K Traders", "PARTH 18-Nov"];
+      const match = preferred.find(p => profileNames.includes(p)) || profileNames[0];
+      if (match) {
+        console.log(`[FinGroww Background] Auto-switching obsolete profile [${currentProfile}] -> [${match}]`);
+        currentProfile = match;
+        chrome.storage.local.set({ fg_selected_profile: match });
+      }
+    }
 
     // Ensure any profiles from leaderboard are included in profilesList
     if (Array.isArray(rawLb) && rawLb.length > 0) {

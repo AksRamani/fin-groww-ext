@@ -21,10 +21,7 @@
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu("FinGroww")
-    .addItem(
-      "🚀 Reset & Load Today (Fresh Clean Table)",
-      "resetSheetTodayOnly",
-    )
+    .addItem("🚀 Reset & Load Today (Fresh Clean Table)", "resetSheetTodayOnly")
     .addItem(
       "🧹 Clean Duplicates & Reformat All (Daily Tables)",
       "cleanDuplicatesAndFixSheet",
@@ -603,7 +600,11 @@ function resetSheetTodayOnly() {
     sheet = ss.insertSheet("Daily PnL Ledger");
   }
 
-  const todayKey = Utilities.formatDate(new Date(), "Asia/Kolkata", "yyyy-MM-dd");
+  const todayKey = Utilities.formatDate(
+    new Date(),
+    "Asia/Kolkata",
+    "yyyy-MM-dd",
+  );
   const nowIst = new Date().toLocaleString("en-IN", {
     timeZone: "Asia/Kolkata",
   });
@@ -613,7 +614,7 @@ function resetSheetTodayOnly() {
   // Fetch live profiles and session states dynamically from FinGroww server
   try {
     const profRes = UrlFetchApp.fetch(
-      "https://fingroww-trading.onrender.com/api/paper/profiles",
+      "https://api.fingroww.tech/api/paper/profiles",
       { muteHttpExceptions: true },
     );
     if (profRes.getResponseCode() === 200) {
@@ -621,7 +622,7 @@ function resetSheetTodayOnly() {
       (pJson.profiles || []).forEach((p) => {
         try {
           const stRes = UrlFetchApp.fetch(
-            `https://fingroww-trading.onrender.com/api/paper/session/state?user=${encodeURIComponent(p.user_name)}`,
+            `https://api.fingroww.tech/api/paper/session/state?user=${encodeURIComponent(p.user_name)}`,
             { muteHttpExceptions: true },
           );
           if (stRes.getResponseCode() === 200) {
@@ -671,7 +672,9 @@ function resetSheetTodayOnly() {
 
   if (Object.keys(todayRecords).length === 0) {
     sheet.clear();
-    SpreadsheetApp.getUi().alert("Sheet cleared. Please click 'Sync to Sheet Now' in the FinGroww extension popup to populate today's data.");
+    SpreadsheetApp.getUi().alert(
+      "Sheet cleared. Please click 'Sync to Sheet Now' in the FinGroww extension popup to populate today's data.",
+    );
     return;
   }
 
