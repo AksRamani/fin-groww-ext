@@ -1496,7 +1496,7 @@ async function triggerLiveMarketTick() {
   }
 }
 
-// Format P&L for Extension Toolbar Badge (e.g. 1k, 0.5k, 1m)
+// Format P&L for Extension Toolbar Badge (e.g. 1k, 0.5k, 10.4k, 11.5k, 12.0k, 1m)
 function formatBadgePnl(pnl) {
   const num = Number(pnl);
   if (isNaN(num) || Math.abs(num) < 0.5) return "0";
@@ -1508,9 +1508,18 @@ function formatBadgePnl(pnl) {
     const str = m >= 10 ? Math.round(m) : m.toFixed(1).replace(/\.0$/, "");
     return `${sign}${str}m`;
   }
+  if (abs >= 10000) {
+    const k = abs / 1000;
+    if (k < 100) {
+      // For 10k to 99.9k: show decimal like 10.4k, 11.5k, 12.0k
+      const str = k.toFixed(1);
+      return `${sign}${str}k`;
+    }
+    return `${sign}${Math.round(k)}k`;
+  }
   if (abs >= 1000) {
     const k = abs / 1000;
-    const str = k >= 10 ? Math.round(k) : k.toFixed(1).replace(/\.0$/, "");
+    const str = k.toFixed(1).replace(/\.0$/, "");
     return `${sign}${str}k`;
   }
   if (abs >= 100) {
