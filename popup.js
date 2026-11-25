@@ -262,7 +262,13 @@ function renderPositionsList(positions, flashMap) {
   if (!sortedPositions || sortedPositions.length === 0) {
     container.innerHTML = `
       <div class="empty-state">
-        <div class="empty-icon">📈</div>
+        <div class="empty-icon">
+          <svg class="ui-icon ui-icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="20" x2="18" y2="10"></line>
+            <line x1="12" y1="20" x2="12" y2="4"></line>
+            <line x1="6" y1="20" x2="6" y2="14"></line>
+          </svg>
+        </div>
         <div class="empty-text">No open trades for <strong>${currentProfile}</strong></div>
       </div>
     `;
@@ -572,11 +578,11 @@ function renderDailyPnlView() {
       selectedDailyUser = currentProfile || userList[0] || "ALL";
     }
 
-    let optionsHtml = `<option value="ALL" ${selectedDailyUser === "ALL" ? "selected" : ""}>👥 All Active Profiles</option>`;
+    let optionsHtml = `<option value="ALL" ${selectedDailyUser === "ALL" ? "selected" : ""}>All Active Profiles</option>`;
     optionsHtml += userList
       .map(
         (u) =>
-          `<option value="${u}" ${selectedDailyUser === u ? "selected" : ""}>👤 ${u}</option>`,
+          `<option value="${u}" ${selectedDailyUser === u ? "selected" : ""}>${u}</option>`,
       )
       .join("");
 
@@ -636,7 +642,14 @@ function renderDailyPnlView() {
   if (summary.records.length === 0) {
     listContainer.innerHTML = `
       <div class="empty-state">
-        <div class="empty-icon">📅</div>
+        <div class="empty-icon">
+          <svg class="ui-icon ui-icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+            <line x1="16" y1="2" x2="16" y2="6"></line>
+            <line x1="8" y1="2" x2="8" y2="6"></line>
+            <line x1="3" y1="10" x2="21" y2="10"></line>
+          </svg>
+        </div>
         <div class="empty-text">No real trading history logged yet for <strong>${isAllView ? "active profiles" : selectedDailyUser || "this profile"}</strong></div>
       </div>
     `;
@@ -699,8 +712,8 @@ function renderDailyPnlView() {
           </div>
 
           <div class="daily-item-sub">
-            <span class="daily-sub-traders">👥 ${r.userBreakdown.length} Trader${r.userBreakdown.length === 1 ? "" : "s"} (${r.winningUsers || 0}W / ${r.losingUsers || 0}L)</span>
-            <span class="daily-sub-trades">📊 ${trades} trades</span>
+            <span class="daily-sub-traders"><svg class="ui-icon ui-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg> ${r.userBreakdown.length} Trader${r.userBreakdown.length === 1 ? "" : "s"} (${r.winningUsers || 0}W / ${r.losingUsers || 0}L)</span>
+            <span class="daily-sub-trades"><svg class="ui-icon ui-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg> ${trades} trades</span>
           </div>
 
           <div class="daily-users-breakdown">
@@ -716,7 +729,7 @@ function renderDailyPnlView() {
                     : "";
                 return `
                 <div class="daily-user-breakdown-row">
-                  <span class="user-row-name">👤 ${u.user}</span>
+                  <span class="user-row-name"><svg class="ui-icon ui-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg> ${u.user}</span>
                   <span class="user-row-trades">${u.tradesCount} trade${u.tradesCount === 1 ? "" : "s"}</span>
                   <span class="user-row-pnl ${uColorClass}">
                     ${uSign}${formatInr(u.pnl)}
@@ -748,7 +761,7 @@ function renderDailyPnlView() {
         </div>
 
         <div class="daily-profile-row">
-          <span class="daily-user-tag">👤 ${selectedDailyUser || r.user}</span>
+          <span class="daily-user-tag"><svg class="ui-icon ui-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg> ${selectedDailyUser || r.user}</span>
           <span class="daily-status-tag ${isProfit ? "tag-profit" : isLoss ? "tag-loss" : "tag-neutral"}">${r.status || (isProfit ? "PROFIT" : isLoss ? "LOSS" : "BREAKEVEN")}</span>
         </div>
 
@@ -1110,14 +1123,14 @@ async function exportSelectedProfileTradesCsv() {
     if (btn) {
       btn.disabled = loading;
       btn.innerHTML = loading
-        ? `<span>⏳</span> Fetching Trades...`
-        : `<span id="exportTradesIcon">📑</span> Selected Profile CSV Only`;
+        ? `<span class="btn-icon-wrap spinning"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.19"/></svg></span> <span>Fetching Trades...</span>`
+        : `<span id="exportTradesIcon" class="btn-icon-wrap"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg></span> <span>Selected Profile CSV Only</span>`;
     }
     if (btnDaily) {
       btnDaily.disabled = loading;
       btnDaily.innerHTML = loading
-        ? `<span>⏳</span> Fetching...`
-        : `<span>📑</span> Selected Profile CSV`;
+        ? `<span class="btn-icon-wrap spinning"><svg class="ui-icon ui-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.19"/></svg></span> <span>Fetching...</span>`
+        : `<svg class="ui-icon ui-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg> <span>Selected Profile CSV</span>`;
     }
   };
 
@@ -1237,14 +1250,14 @@ async function exportAllProfilesTradesCsvAction() {
     if (btnAll) {
       btnAll.disabled = loading;
       btnAll.innerHTML = loading
-        ? `<span>⏳</span> Downloading All Profiles CSVs...`
-        : `<span id="exportAllTradesIcon">📥</span> Download All Profiles CSVs (Loss & Profit)`;
+        ? `<span class="btn-icon-wrap spinning"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.19"/></svg></span> <span>Downloading All Profiles CSVs...</span>`
+        : `<span id="exportAllTradesIcon" class="btn-icon-wrap"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg></span> <span>Download All Profiles CSVs (Loss & Profit)</span>`;
     }
     if (btnDailyAll) {
       btnDailyAll.disabled = loading;
       btnDailyAll.innerHTML = loading
-        ? `<span>⏳</span> Downloading...`
-        : `<span>📥</span> All Profiles CSVs`;
+        ? `<span class="btn-icon-wrap spinning"><svg class="ui-icon ui-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.19"/></svg></span> <span>Downloading...</span>`
+        : `<svg class="ui-icon ui-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg> <span>All Profiles CSVs</span>`;
     }
   };
 

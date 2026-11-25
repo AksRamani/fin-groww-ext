@@ -10,18 +10,30 @@
   <!-- Header -->
   <header class="app-header">
     <div class="brand">
-      <div class="brand-logo">⚡</div>
+      <div class="brand-logo" aria-hidden="true">
+        <svg class="ui-icon ui-icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+        </svg>
+      </div>
       <div class="brand-meta">
         <h1 class="brand-title">FinGroww Trading</h1>
-        <span class="brand-sub">Live Position & Rank Monitor</span>
+        <span class="brand-sub">Live Position &amp; Rank Monitor</span>
       </div>
     </div>
     <div class="header-actions">
-      <button id="btnRefresh" class="icon-btn" title="Refresh Live Data">
-        <span id="refreshIcon">↻</span>
+      <button id="btnRefresh" class="icon-btn" title="Refresh Live Data" aria-label="Refresh Live Data">
+        <span id="refreshIcon" class="icon-wrap">
+          <svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.19"/>
+          </svg>
+        </span>
       </button>
-      <a href="https://fingroww.tech/ai-auto-paper-trading.html" target="_blank" class="icon-btn" title="Open FinGroww Web Page">
-        ↗
+      <a href="https://fingroww.tech/ai-auto-paper-trading.html" target="_blank" rel="noopener noreferrer" class="icon-btn" title="Open FinGroww Web Platform" aria-label="Open FinGroww Web Platform">
+        <svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+          <polyline points="15 3 21 3 21 9"></polyline>
+          <line x1="10" y1="14" x2="21" y2="3"></line>
+        </svg>
       </a>
     </div>
   </header>
@@ -30,15 +42,31 @@
   <section class="profile-card">
     <div class="profile-select-row">
       <label for="selProfile" class="label-xs">SELECT TRADER PROFILE</label>
-      <select id="selProfile" class="profile-select">
-        <option value="">Loading profiles...</option>
-      </select>
+      <div class="select-wrapper">
+        <select id="selProfile" class="profile-select">
+          <option value="">Loading profiles...</option>
+        </select>
+        <span class="select-arrow" aria-hidden="true">
+          <svg class="ui-icon ui-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
+        </span>
+      </div>
     </div>
 
     <!-- Rank & Status Row -->
     <div class="rank-status-row">
-      <div id="rankBadge" class="rank-badge">
-        <span class="rank-icon">🏆</span>
+      <div id="rankBadge" class="rank-badge" title="Ranking among active paper traders">
+        <span class="rank-icon" aria-hidden="true">
+          <svg class="ui-icon ui-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path>
+            <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path>
+            <path d="M4 22h16"></path>
+            <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"></path>
+            <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"></path>
+            <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"></path>
+          </svg>
+        </span>
         <span id="rankVal">Rank --/--</span>
       </div>
 
@@ -53,7 +81,7 @@
   <section class="kpi-section">
     <div class="kpi-grid">
       <div class="kpi-card pnl-card">
-        <div class="kpi-lbl">Overall Profit & Loss</div>
+        <div class="kpi-lbl">Overall Profit &amp; Loss</div>
         <div class="kpi-val" id="totalPnl">₹0.00</div>
         <div class="kpi-sub" id="returnPct">0.00% Return</div>
       </div>
@@ -68,12 +96,12 @@
     <!-- Professional Financial Breakdown Strip -->
     <div class="kpi-financial-strip">
       <div class="financial-strip-item">
-        <span class="strip-label">CHARGES & TAXES</span>
+        <span class="strip-label">CHARGES &amp; TAXES</span>
         <span class="strip-value val-gold" id="kpiBrokerageVal">₹0.00</span>
       </div>
       <div class="financial-strip-divider"></div>
       <div class="financial-strip-item">
-        <span class="strip-label">REALIZED P&L</span>
+        <span class="strip-label">REALIZED P&amp;L</span>
         <span class="strip-value" id="kpiTotalProfitVal">₹0.00</span>
       </div>
     </div>
@@ -81,16 +109,29 @@
 
   <!-- Navigation Tabs: Open Positions vs Day-to-Day P&L -->
   <nav class="popup-nav-tabs" role="tablist">
-    <button type="button" class="nav-tab active" id="tabBtnPositions" role="tab" aria-selected="true">
-      <span class="nav-tab-icon">⚡</span> Open Positions
+    <button type="button" class="nav-tab active" id="tabBtnPositions" role="tab" aria-selected="true" aria-controls="panelPositions">
+      <span class="nav-tab-icon" aria-hidden="true">
+        <svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+        </svg>
+      </span>
+      <span>Open Positions</span>
     </button>
-    <button type="button" class="nav-tab" id="tabBtnDailyPnl" role="tab" aria-selected="false">
-      <span class="nav-tab-icon">📅</span> Day-to-Day P&L
+    <button type="button" class="nav-tab" id="tabBtnDailyPnl" role="tab" aria-selected="false" aria-controls="panelDailyPnl">
+      <span class="nav-tab-icon" aria-hidden="true">
+        <svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+          <line x1="16" y1="2" x2="16" y2="6"></line>
+          <line x1="8" y1="2" x2="8" y2="6"></line>
+          <line x1="3" y1="10" x2="21" y2="10"></line>
+        </svg>
+      </span>
+      <span>Day-to-Day P&amp;L</span>
     </button>
   </nav>
 
   <!-- Panel 1: Live Open Positions -->
-  <div id="panelPositions" class="tab-panel">
+  <div id="panelPositions" class="tab-panel" role="tabpanel" aria-labelledby="tabBtnPositions">
     <!-- Open Positions Section -->
     <section class="positions-section">
       <div class="section-header">
@@ -106,21 +147,40 @@
 
       <div id="positionsList" class="positions-list">
         <div class="empty-state">
-          <div class="empty-icon">📊</div>
+          <div class="empty-icon">
+            <svg class="ui-icon ui-icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="20" x2="18" y2="10"></line>
+              <line x1="12" y1="20" x2="12" y2="4"></line>
+              <line x1="6" y1="20" x2="6" y2="14"></line>
+            </svg>
+          </div>
           <div class="empty-text">Loading open positions...</div>
         </div>
       </div>
     </section>
 
-    <!-- End-of-Day Trade Details CSV Export Card (Bottom next to Open Trades) -->
+    <!-- End-of-Day Trade Details CSV Export Card -->
     <section class="settings-card trades-export-card">
       <div class="trades-export-title-row">
-        <span class="trades-export-icon">📑</span>
+        <span class="trades-export-icon" aria-hidden="true">
+          <svg class="ui-icon ui-icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="16" y1="13" x2="8" y2="13"></line>
+            <line x1="16" y1="17" x2="8" y2="17"></line>
+            <polyline points="10 9 9 9 8 9"></polyline>
+          </svg>
+        </span>
         <div class="trades-export-title-group">
           <div class="trades-export-title">
             <span>Trade Details CSV Auto-Download</span>
             <span id="tradesExportCountBadge" class="count-pill">-- Trades</span>
-            <span class="path-pill" style="font-family:monospace;font-size:10px;background:rgba(255,255,255,0.06);padding:2px 6px;border-radius:4px;color:#38bdf8;" title="Target Directory">📁 D:\Tred CSVs</span>
+            <span class="path-pill" title="Target Directory: D:\Tred CSVs">
+              <svg class="ui-icon ui-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+              </svg>
+              D:\Tred CSVs
+            </span>
           </div>
           <div class="trades-export-desc" id="tradesExportStatusDesc">
             Download individual CSV files with all trade details for all profiles in profit or loss
@@ -128,18 +188,33 @@
         </div>
       </div>
 
-      <div class="trades-export-action-row" style="display: flex; flex-direction: column; gap: 7px;">
+      <div class="trades-export-action-row">
         <button type="button" id="btnExportAllProfilesCsv" class="btn-export-trades-primary" title="Download individual CSV files for all profiles in profit or loss + master combined CSV">
-          <span id="exportAllTradesIcon">📥</span> Download All Profiles CSVs (Loss & Profit)
+          <span id="exportAllTradesIcon" class="btn-icon-wrap">
+            <svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+          </span>
+          <span>Download All Profiles CSVs (Loss &amp; Profit)</span>
         </button>
         <button type="button" id="btnExportTradesCsv" class="btn-export-trades-secondary" title="Export all trade details for selected profile only">
-          <span id="exportTradesIcon">📑</span> Selected Profile CSV Only
+          <span id="exportTradesIcon" class="btn-icon-wrap">
+            <svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+            </svg>
+          </span>
+          <span>Selected Profile CSV Only</span>
         </button>
       </div>
 
       <div class="setting-row trades-auto-row">
         <div class="setting-info">
-          <div class="setting-title" style="font-size:11px;">
+          <div class="setting-title">
             <span>Auto-download at Market Close (3:30 PM IST)</span>
           </div>
           <div class="setting-desc" id="tradesLastDownloadTime">
@@ -163,7 +238,7 @@
             <span>Show Floating Pill</span>
           </div>
           <div class="setting-desc">
-            <span>Shortcuts: <strong>Alt + S</strong> (Bar) • <strong>Alt + A</strong> (Pill)</span>
+            <span>Shortcuts: <kbd class="kbd-badge">Alt + S</kbd> (Bar) • <kbd class="kbd-badge">Alt + A</kbd> (Pill)</span>
           </div>
         </div>
         <label class="switch" title="Toggle floating pill & status bar visibility (Alt + A)">
@@ -172,10 +247,10 @@
         </label>
       </div>
 
-      <div class="setting-row" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border-subtle);">
+      <div class="setting-row setting-row-bordered">
         <div class="setting-info">
           <div class="setting-title">
-            <span>Show Bar, Pill & Badge After Market Closes</span>
+            <span>Show Bar, Pill &amp; Badge After Market Closes</span>
           </div>
           <div class="setting-desc" id="marketStatusDesc">
             <span class="market-status-dot"></span>
@@ -191,14 +266,21 @@
   </div>
 
   <!-- Panel 2: Day-to-Day Profit & Loss History -->
-  <div id="panelDailyPnl" class="tab-panel" style="display: none;">
-    <!-- Profile Selection Row for Daily P&L (Profile-by-Profile Only) -->
+  <div id="panelDailyPnl" class="tab-panel" role="tabpanel" aria-labelledby="tabBtnDailyPnl" style="display: none;">
+    <!-- Profile Selection Row for Daily P&L -->
     <section class="profile-card daily-user-card">
       <div class="profile-select-row">
         <label for="selDailyUser" class="label-xs">SELECT TRADER PROFILE</label>
-        <select id="selDailyUser" class="profile-select">
-          <option value="">Loading profiles...</option>
-        </select>
+        <div class="select-wrapper">
+          <select id="selDailyUser" class="profile-select">
+            <option value="">Loading profiles...</option>
+          </select>
+          <span class="select-arrow" aria-hidden="true">
+            <svg class="ui-icon ui-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
+          </span>
+        </div>
       </div>
     </section>
 
@@ -217,7 +299,7 @@
       </div>
 
       <div class="daily-kpi-card daily-net-card" title="Net Total Profit & Loss across recorded days">
-        <div class="daily-kpi-lbl">NET TOTAL P&L</div>
+        <div class="daily-kpi-lbl">NET TOTAL P&amp;L</div>
         <div class="daily-kpi-val" id="dailyNetPnl">₹0.00</div>
         <div class="daily-kpi-sub" id="dailyWinRate">Win Rate: 0.0%</div>
       </div>
@@ -228,12 +310,25 @@
       <div class="gsheet-header">
         <div class="setting-info">
           <div class="setting-title">
-            <span>📊 Google Sheet Sync</span>
+            <span class="gsheet-title-text">
+              <svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                <line x1="3" y1="9" x2="21" y2="9"></line>
+                <line x1="9" y1="21" x2="9" y2="9"></line>
+              </svg>
+              Google Sheet Sync
+            </span>
             <span id="gsheetStatusBadge" class="gsheet-badge gsheet-badge-idle">Not Configured</span>
           </div>
-          <div class="setting-desc" id="gsheetStatusDesc">Auto-appends end-of-day P&L ledger at 3:30 PM IST</div>
+          <div class="setting-desc" id="gsheetStatusDesc">Auto-appends end-of-day P&amp;L ledger at 3:30 PM IST</div>
         </div>
-        <button type="button" id="btnToggleGsheetConfig" class="link-btn" title="Configure Webhook URL">⚙️ Config</button>
+        <button type="button" id="btnToggleGsheetConfig" class="link-btn-chip" title="Configure Webhook URL">
+          <svg class="ui-icon ui-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+          Config
+        </button>
       </div>
 
       <!-- Expandable Config Drawer -->
@@ -243,10 +338,10 @@
           <input type="url" id="txtGsheetUrl" placeholder="https://script.google.com/macros/s/.../exec" class="gsheet-input" spellcheck="false" autocomplete="off">
           <button type="button" id="btnSaveGsheetUrl" class="btn-primary-sm">Save</button>
         </div>
-        <div class="setting-row" style="margin-top: 8px;">
-          <div class="setting-info">
-            <span class="setting-title" style="font-size:11px;">Auto-sync at Market Close (3:30 PM IST)</span>
-          </div>
+      <div class="setting-row setting-row-sm">
+        <div class="setting-info">
+          <span class="setting-title setting-title-sm">Auto-sync at Market Close (3:30 PM IST)</span>
+        </div>
           <label class="switch switch-sm" title="Automatically send closing figures to Google Sheet at 3:30 PM">
             <input type="checkbox" id="chkGsheetAutoSync" checked>
             <span class="slider round"></span>
@@ -256,14 +351,31 @@
 
       <div class="gsheet-actions-container">
         <button type="button" id="btnSyncGsheetNow" class="btn-gsheet-sync" title="Sync Today's Closing P&L to Google Sheet">
-          <span id="gsheetSyncIcon">📤</span> Sync to Sheet Now
+          <span id="gsheetSyncIcon" class="btn-icon-wrap">
+            <svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+              <path d="M3 3v5h5"></path>
+              <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"></path>
+              <path d="M16 16h5v5"></path>
+            </svg>
+          </span>
+          <span>Sync to Sheet Now</span>
         </button>
         <div class="gsheet-export-subrow">
           <button type="button" id="btnExportAllTradesCsvDaily" class="btn-export-trades-daily" title="Download individual CSV files for all profiles in profit/loss to D:\Tred CSVs">
-            <span>📥</span> All Profiles CSVs
+            <svg class="ui-icon ui-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            <span>All Profiles CSVs</span>
           </button>
           <button type="button" id="btnExportTradesCsvDaily" class="btn-export-trades-daily-secondary" title="Export trade details for selected profile to CSV">
-            <span>📑</span> Selected Profile CSV
+            <svg class="ui-icon ui-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+            </svg>
+            <span>Selected Profile CSV</span>
           </button>
         </div>
       </div>
@@ -274,7 +386,7 @@
     <section class="positions-section">
       <div class="section-header">
         <div class="section-title">
-          <span>DAY-TO-DAY P&L HISTORY</span>
+          <span>DAY-TO-DAY P&amp;L HISTORY</span>
           <span id="dailyDaysCountBadge" class="count-pill">0 Days</span>
         </div>
         <div class="live-indicator">
@@ -285,8 +397,15 @@
 
       <div id="dailyPnlList" class="daily-pnl-list">
         <div class="empty-state">
-          <div class="empty-icon">📅</div>
-          <div class="empty-text">Loading daily P&L history...</div>
+          <div class="empty-icon">
+            <svg class="ui-icon ui-icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+              <line x1="16" y1="2" x2="16" y2="6"></line>
+              <line x1="8" y1="2" x2="8" y2="6"></line>
+              <line x1="3" y1="10" x2="21" y2="10"></line>
+            </svg>
+          </div>
+          <div class="empty-text">Loading daily P&amp;L history...</div>
         </div>
       </div>
     </section>
@@ -295,10 +414,14 @@
   <!-- Footer -->
   <footer class="app-footer">
     <span class="footer-sync-info" id="syncStatus">Auto-syncing every 5s</span>
-    <button id="btnOpenLeaderboard" class="link-btn">Leaderboard</button>
+    <button id="btnOpenLeaderboard" class="link-btn">
+      <span>Leaderboard</span>
+      <svg class="ui-icon ui-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="9 18 15 12 9 6"></polyline>
+      </svg>
+    </button>
   </footer>
 
   <script src="popup.js"></script>
 </body>
 </html>
-
