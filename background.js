@@ -436,39 +436,40 @@ async function syncAllProfilesSessionStates(profileNames = []) {
       try {
         const res = await apiFetch(`/api/paper/session/state?user=${encodeURIComponent(u)}`, {}, 12000);
         if (res && res.account) {
+          const acc = res.account;
+          const openPositions = res.active_positions || [];
+          const todayMetrics = await getTodayMetricsForProfile(u, openPositions);
+          const initCap = Number(acc.initial_capital) || 100000;
+
+          acc.today_pnl = todayMetrics.totalPnl;
+          acc.today_realized_pnl = todayMetrics.realizedPnl;
+          acc.today_unrealized_pnl = todayMetrics.unrealizedPnl;
+          acc.today_charges = todayMetrics.charges;
+          acc.today_trades_count = todayMetrics.tradesCount;
+          acc.today_return_pct = Number(((todayMetrics.totalPnl / initCap) * 100).toFixed(2));
+
           profileCaches[u] = {
             ...(profileCaches[u] || {}),
-            account: res.account,
+            account: acc,
             status: res.engine_status || res.status || "RUNNING",
-            positions: res.active_positions || [],
+            positions: openPositions,
             timestamp: Date.now()
           };
 
-          const acc = res.account;
-          const trades = Number(acc.total_trades || (res.stats && res.stats.total_trades) || 0);
-          const pnl = Number(acc.total_pnl !== undefined ? acc.total_pnl : acc.net_pnl) || 0;
-          const openPositions = res.active_positions || [];
-
-          let realized = Number(acc.realized_pnl !== undefined ? acc.realized_pnl : 0);
-          let unrealized = Number(acc.unrealized_pnl !== undefined ? acc.unrealized_pnl : 0);
-
-          if (openPositions.length === 0 || unrealized === 0) {
-            if (realized === 0 && pnl !== 0) realized = pnl;
-            unrealized = 0;
-          } else if (realized === 0 && unrealized !== 0 && pnl !== 0) {
-            realized = pnl - unrealized;
-          }
-
-          acc.realized_pnl = realized;
-          acc.unrealized_pnl = unrealized;
-
-          if (trades > 0 || pnl !== 0 || realized !== 0) {
+          if (todayMetrics.tradesCount > 0 || Math.abs(todayMetrics.totalPnl) > 0.001) {
             updateDailyPnlRecord(
               u,
               acc,
               res.engine_status || res.status || "RUNNING",
-              openPositions.length,
-              res.stats || {}
+              todayMetrics.openCount,
+              {
+                total_trades: todayMetrics.tradesCount,
+                total_closed_trades_count: todayMetrics.closedCount,
+                winning_trades: todayMetrics.wins,
+                losing_trades: todayMetrics.losses,
+                win_rate: todayMetrics.winRate,
+                open_positions_count: todayMetrics.openCount
+              }
             );
           }
         }
@@ -650,19 +651,19 @@ async function performMasterSync() {
     // Find current profile in leaderboard for complete win/loss trade analytics
     const currentLb = (leaderboard || []).find(p => (p.user_name || p.name) === currentProfile);
 
-    // Update daily P&L for current user with full dynamic stats
+    // Update daily P&L for current user with strictly Today's stats
     updateDailyPnlRecord(
       currentProfile,
       account,
       engineStatus,
-      activePositions ? activePositions.length : 0,
+      todayMetrics.openCount,
       {
-        total_trades: currentLb?.total_trades !== undefined ? currentLb.total_trades : sessionData?.total_closed_trades_count,
-        total_closed_trades_count: sessionData?.total_closed_trades_count,
-        winning_trades: currentLb?.winning_trades,
-        losing_trades: currentLb?.losing_trades,
-        win_rate: currentLb?.win_rate,
-        open_positions_count: activePositions ? activePositions.length : currentLb?.open_positions_count
+        total_trades: todayMetrics.tradesCount,
+        total_closed_trades_count: todayMetrics.closedCount,
+        winning_trades: todayMetrics.wins,
+        losing_trades: todayMetrics.losses,
+        win_rate: todayMetrics.winRate,
+        open_positions_count: todayMetrics.openCount
       }
     );
 
@@ -683,9 +684,14 @@ async function performMasterSync() {
       });
     }
 
+    const { dateKey: todayKeyForMap } = getIstDateInfo();
     profileMap.forEach((entry, u) => {
       // If this is the currently active profile and we already updated it with fresh sessionData above, skip
       if (u === currentProfile && sessionData && sessionData.account) return;
+      // If we already have today-filtered metrics for this profile from syncAllProfilesSessionStates, don't overwrite with carryforward leaderboard totals
+      if (dailyPnlHistory.byUser?.[u]?.[todayKeyForMap] && profileCaches[u]?.account?.today_pnl !== undefined) {
+        return;
+      }
 
       const trades = Number(entry.total_trades) || 0;
       const pnl = Number(entry.net_pnl !== undefined ? entry.net_pnl : (entry.total_pnl !== undefined ? entry.total_pnl : entry.realized_pnl)) || 0;
@@ -1658,8 +1664,21 @@ async function triggerLiveMarketTick() {
         timestamp: Date.now()
       };
 
-      // Update today's P&L for current profile
-      updateDailyPnlRecord(currentProfile, account, status, positions.length);
+      // Update today's P&L for current profile with strictly Today's stats
+      updateDailyPnlRecord(
+        currentProfile,
+        account,
+        status,
+        todayMetrics.openCount,
+        {
+          total_trades: todayMetrics.tradesCount,
+          total_closed_trades_count: todayMetrics.closedCount,
+          winning_trades: todayMetrics.wins,
+          losing_trades: todayMetrics.losses,
+          win_rate: todayMetrics.winRate,
+          open_positions_count: todayMetrics.openCount
+        }
+      );
 
       const stored = await chrome.storage.local.get(["fg_latest_data", "fg_profiles_cache"]);
       const prev = stored?.fg_latest_data || {};
