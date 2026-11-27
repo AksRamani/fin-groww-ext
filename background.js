@@ -55,6 +55,125 @@ function getIstDateInfo(d = new Date()) {
   }
 }
 
+// Extract YYYY-MM-DD (IST) from any trade/position timestamp string or epoch
+function getIstDateKeyFromValue(val) {
+  if (val === undefined || val === null || val === "") return "";
+  if (typeof val === "number") {
+    const ms = val < 1e12 ? val * 1000 : val;
+    const d = new Date(ms);
+    if (!isNaN(d.getTime())) return getIstDateInfo(d).dateKey;
+    return "";
+  }
+  const str = String(val).trim();
+  if (!str) return "";
+  if (/^\d{4}-\d{2}-\d{2}T.*(Z|[+-]\d{2}:?\d{2})$/i.test(str)) {
+    const d = new Date(str);
+    if (!isNaN(d.getTime())) return getIstDateInfo(d).dateKey;
+  }
+  const isoMatch = str.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (isoMatch) {
+    return isoMatch[1];
+  }
+  const dmyMatch = str.match(/^(\d{2})[-/](\d{2})[-/](\d{4})/);
+  if (dmyMatch) {
+    return `${dmyMatch[3]}-${dmyMatch[2]}-${dmyMatch[1]}`;
+  }
+  const parsed = new Date(str);
+  if (!isNaN(parsed.getTime())) {
+    return getIstDateInfo(parsed).dateKey;
+  }
+  return "";
+}
+
+// Filter closed trades and open positions strictly to a single IST date (current day)
+function filterCurrentDayTradesAndPositions(closedTrades = [], openPositions = [], targetDateKey = getIstDateInfo().dateKey) {
+  const dayClosedTrades = (Array.isArray(closedTrades) ? closedTrades : []).filter((t) => {
+    const dKey = getIstDateKeyFromValue(t.exit_time || t.closed_at || t.entry_time || t.market_data_timestamp);
+    return dKey === targetDateKey;
+  });
+
+  const dayOpenPositions = (Array.isArray(openPositions) ? openPositions : []).filter((pos) => {
+    const dKey = getIstDateKeyFromValue(pos.entry_time || pos.entry_timestamp || pos.last_updated);
+    return dKey === targetDateKey;
+  });
+
+  return { dayClosedTrades, dayOpenPositions };
+}
+
+// Compute exact current-day P&L, total trades, brokerage/charges, and win/loss stats
+function computeDailyMetricsFromTrades(dayClosedTrades = [], dayOpenPositions = []) {
+  let realizedPnl = 0;
+  let closedCharges = 0;
+  let wins = 0;
+  let losses = 0;
+
+  for (const t of dayClosedTrades) {
+    const net = Number(t.net_pnl) || 0;
+    const chg = Number(t.charges) || 0;
+    realizedPnl += net;
+    closedCharges += chg;
+    const isWin = t.is_win !== undefined ? Boolean(t.is_win) : net > 0;
+    if (isWin) wins++;
+    else if (net < 0) losses++;
+  }
+
+  let unrealizedPnl = 0;
+  let openCharges = 0;
+  for (const pos of dayOpenPositions) {
+    unrealizedPnl += Number(pos.unrealized_pnl) || 0;
+    openCharges += Number(pos.total_charges || pos.entry_charges) || 0;
+  }
+
+  const charges = closedCharges + openCharges;
+  const totalPnl = realizedPnl + unrealizedPnl;
+  const tradesCount = dayClosedTrades.length + dayOpenPositions.length;
+  const winRate = (wins + losses) > 0 ? (wins / (wins + losses)) * 100 : 0;
+
+  return {
+    totalPnl: Number(totalPnl.toFixed(2)),
+    realizedPnl: Number(realizedPnl.toFixed(2)),
+    unrealizedPnl: Number(unrealizedPnl.toFixed(2)),
+    charges: Number(charges.toFixed(2)),
+    tradesCount,
+    closedCount: dayClosedTrades.length,
+    openCount: dayOpenPositions.length,
+    wins,
+    losses,
+    winRate
+  };
+}
+
+let todayClosedCache = {};
+
+// Compute live Today's P&L metrics for active profile (today's closed trades + today's open positions)
+async function getTodayMetricsForProfile(profileName, activePositions = [], forceRefresh = false) {
+  const { dateKey: todayKey } = getIstDateInfo();
+  const cached = todayClosedCache[profileName];
+  const isStale = !cached || cached.dateKey !== todayKey || forceRefresh || (Date.now() - cached.fetchedAt > 15000);
+
+  if (isStale) {
+    try {
+      const tradesRes = await apiFetch(`/api/paper/trades?user=${encodeURIComponent(profileName)}&limit=10000`, {}, 15000);
+      if (tradesRes && Array.isArray(tradesRes.trades)) {
+        const { dayClosedTrades } = filterCurrentDayTradesAndPositions(tradesRes.trades, [], todayKey);
+        todayClosedCache[profileName] = {
+          dateKey: todayKey,
+          dayClosedTrades,
+          fetchedAt: Date.now()
+        };
+      }
+    } catch (e) {
+      // Keep prior cache on transient network error
+    }
+  }
+
+  const dayClosedTrades = (todayClosedCache[profileName]?.dateKey === todayKey)
+    ? todayClosedCache[profileName].dayClosedTrades
+    : [];
+  const { dayOpenPositions } = filterCurrentDayTradesAndPositions([], activePositions, todayKey);
+  return computeDailyMetricsFromTrades(dayClosedTrades, dayOpenPositions);
+}
+
 // Clean daily P&L history to ensure ONLY real server profiles and real sessions are kept
 function cleanDailyPnlHistory(validProfiles = []) {
   if (!dailyPnlHistory || !dailyPnlHistory.byUser) return;
@@ -98,10 +217,22 @@ function updateDailyPnlRecord(profileName, accountObj, statusVal, activePosition
   const existingRecord = dailyPnlHistory.byUser?.[profileName]?.[dateKey] || {};
 
   const acc = accountObj || {};
-  const totalPnl = Number(acc.total_pnl !== undefined ? acc.total_pnl : (acc.net_pnl !== undefined ? acc.net_pnl : existingRecord.totalPnl)) || 0;
+  const totalPnl = Number(
+    acc.today_pnl !== undefined
+      ? acc.today_pnl
+      : (acc.total_pnl !== undefined ? acc.total_pnl : (acc.net_pnl !== undefined ? acc.net_pnl : existingRecord.totalPnl))
+  ) || 0;
   
-  let realizedPnl = Number(acc.realized_pnl !== undefined ? acc.realized_pnl : existingRecord.realizedPnl) || 0;
-  let unrealizedPnl = Number(acc.unrealized_pnl !== undefined ? acc.unrealized_pnl : existingRecord.unrealizedPnl) || 0;
+  let realizedPnl = Number(
+    acc.today_realized_pnl !== undefined
+      ? acc.today_realized_pnl
+      : (acc.realized_pnl !== undefined ? acc.realized_pnl : existingRecord.realizedPnl)
+  ) || 0;
+  let unrealizedPnl = Number(
+    acc.today_unrealized_pnl !== undefined
+      ? acc.today_unrealized_pnl
+      : (acc.unrealized_pnl !== undefined ? acc.unrealized_pnl : existingRecord.unrealizedPnl)
+  ) || 0;
 
   // Realized vs Unrealized P&L reconciliation
   if (activePositionsCount === 0 || unrealizedPnl === 0) {
@@ -114,7 +245,11 @@ function updateDailyPnlRecord(profileName, accountObj, statusVal, activePosition
   }
 
   const equity = Number(acc.account_equity || acc.equity || existingRecord.equity) || 100000;
-  const charges = Number(acc.total_charges !== undefined ? acc.total_charges : (acc.charges !== undefined ? acc.charges : (existingRecord.charges || 0))) || 0;
+  const charges = Number(
+    acc.today_charges !== undefined
+      ? acc.today_charges
+      : (acc.total_charges !== undefined ? acc.total_charges : (acc.charges !== undefined ? acc.charges : (existingRecord.charges || 0)))
+  ) || 0;
   const slippage = Number(acc.total_slippage !== undefined ? acc.total_slippage : (existingRecord.slippage || 0)) || 0;
 
   // Real trades count resolution from server API:
@@ -500,13 +635,20 @@ async function performMasterSync() {
       }
     }
 
-    let totalPnl = Number(account.total_pnl !== undefined ? account.total_pnl : (account.net_pnl !== undefined ? account.net_pnl : 0)) || 0;
+    // Compute strictly Today's P&L, charges & trades for active profile (excludes previous days' carryforward)
+    const todayMetrics = await getTodayMetricsForProfile(currentProfile, activePositions || []);
+    const initCap = Number(account.initial_capital) || 100000;
+    account.today_pnl = todayMetrics.totalPnl;
+    account.today_realized_pnl = todayMetrics.realizedPnl;
+    account.today_unrealized_pnl = todayMetrics.unrealizedPnl;
+    account.today_charges = todayMetrics.charges;
+    account.today_trades_count = todayMetrics.tradesCount;
+    account.today_return_pct = Number(((todayMetrics.totalPnl / initCap) * 100).toFixed(2));
+
+    let totalPnl = todayMetrics.totalPnl;
 
     // Find current profile in leaderboard for complete win/loss trade analytics
     const currentLb = (leaderboard || []).find(p => (p.user_name || p.name) === currentProfile);
-    if (totalPnl === 0 && currentLb) {
-      totalPnl = Number(currentLb.net_pnl !== undefined ? currentLb.net_pnl : currentLb.total_pnl) || 0;
-    }
 
     // Update daily P&L for current user with full dynamic stats
     updateDailyPnlRecord(
@@ -867,19 +1009,26 @@ async function exportProfileTradesCsv(options = {}) {
       })
     ]);
 
-    const closedTrades = tradesRes && Array.isArray(tradesRes.trades) ? tradesRes.trades : [];
-    const openPositions = sessionRes && Array.isArray(sessionRes.active_positions) ? sessionRes.active_positions : [];
+    const { dateKey: todayKey } = getIstDateInfo();
+    const rawClosedTrades = tradesRes && Array.isArray(tradesRes.trades) ? tradesRes.trades : [];
+    const rawOpenPositions = sessionRes && Array.isArray(sessionRes.active_positions) ? sessionRes.active_positions : [];
+
+    // Filter strictly to current day (todayKey) so carryforward trades from previous days are never exported
+    const { dayClosedTrades: closedTrades, dayOpenPositions: openPositions } = filterCurrentDayTradesAndPositions(
+      rawClosedTrades,
+      rawOpenPositions,
+      todayKey
+    );
 
     if (closedTrades.length === 0 && openPositions.length === 0) {
-      console.warn(`[FinGroww Background] No trades or positions found for profile: ${targetProfile}`);
+      console.warn(`[FinGroww Background] No trades or positions found for profile: ${targetProfile} on ${todayKey}`);
       return {
         success: false,
-        error: `No trades or positions found for "${targetProfile}".`,
+        error: `No trades or positions found for "${targetProfile}" on ${todayKey}.`,
         count: 0
       };
     }
 
-    const { dateKey: todayKey } = getIstDateInfo();
     const { csvContent, totalTradesCount, closedCount, openCount } = buildProfileTradesCsv(targetProfile, closedTrades, openPositions);
 
     const sanitizedProfile = targetProfile.replace(/[^a-zA-Z0-9_-]/g, "_");
@@ -1054,17 +1203,23 @@ async function exportAllProfilesTradesCsv(options = {}) {
           })
         ]);
 
-        const closedTrades = tradesRes && Array.isArray(tradesRes.trades) ? tradesRes.trades : [];
-        const openPositions = sessionRes && Array.isArray(sessionRes.active_positions) ? sessionRes.active_positions : [];
+        const rawClosedTrades = tradesRes && Array.isArray(tradesRes.trades) ? tradesRes.trades : [];
+        const rawOpenPositions = sessionRes && Array.isArray(sessionRes.active_positions) ? sessionRes.active_positions : [];
 
-        // If no trades or positions found, verify if profile has recorded PnL
-        const sessionAccount = sessionRes?.account || {};
-        const sessPnl = Number(sessionAccount.total_pnl !== undefined ? sessionAccount.total_pnl : prof.pnl) || 0;
+        // Filter strictly to current day (todayKey) so carryforward data from previous days is never exported
+        const { dayClosedTrades: closedTrades, dayOpenPositions: openPositions } = filterCurrentDayTradesAndPositions(
+          rawClosedTrades,
+          rawOpenPositions,
+          todayKey
+        );
 
         if (closedTrades.length === 0 && openPositions.length === 0) {
-          console.log(`[FinGroww Background] No trades found for ${pName}, skipping CSV.`);
+          console.log(`[FinGroww Background] No trades on ${todayKey} for ${pName}, skipping CSV.`);
           continue;
         }
+
+        const dayMetrics = computeDailyMetricsFromTrades(closedTrades, openPositions);
+        const sessPnl = dayMetrics.totalPnl;
 
         const { headers, rawRows, csvContent, totalTradesCount } = buildProfileTradesCsv(pName, closedTrades, openPositions);
 
@@ -1269,98 +1424,129 @@ async function syncDailyPnlToGoogleSheet(options = {}) {
     const history = options.dailyHistory || stored.fg_daily_pnl_history || dailyPnlHistory;
     const historyByUser = history?.byUser || {};
 
-    const { dateKey: todayKey } = getIstDateInfo();
-    const targetDate = options.targetDate || todayKey;
+    const { dateKey: todayKey, displayDate: todayDisplayDate, dayName: todayDayName } = getIstDateInfo();
+    // Strictly sync ONLY the current day (or explicitly requested single targetDate), never multiple days
+    const dKey = options.targetDate || todayKey;
+    const dInfo = dKey === todayKey ? { displayDate: todayDisplayDate, dayName: todayDayName } : { displayDate: dKey, dayName: "" };
 
-    // Build rows for target date (or all dates if options.allDates is true)
-    const targetDates = options.allDates
-      ? Array.from(new Set(Object.values(historyByUser).flatMap(u => Object.keys(u)))).filter(d => d === todayKey).sort((a, b) => a.localeCompare(b))
-      : [targetDate];
+    // Discover all candidate profiles from server API, cache, and history
+    const [profilesRes, leaderboardRes] = await Promise.all([
+      apiFetch("/api/paper/profiles", {}, 12000).catch(() => null),
+      apiFetch("/api/paper/leaderboard", {}, 12000).catch(() => null)
+    ]);
 
-    // Refresh live session states & broker charges for ALL active profiles before syncing
-    const profilesToFetch = Object.keys(historyByUser).filter(u => !u.includes("ALL USERS"));
-    if (profilesToFetch.length > 0) {
-      await syncAllProfilesSessionStates(profilesToFetch);
+    const candidateSet = new Set();
+    const addCandidate = (name) => {
+      if (!name || typeof name !== "string") return;
+      const clean = name.trim();
+      if (!clean || clean.includes("ALL USERS") || /^[-\d\.,]+$/.test(clean)) return;
+      candidateSet.add(clean);
+    };
+
+    if (Array.isArray(profilesRes)) {
+      profilesRes.forEach(p => addCandidate(p.user_name || p.name));
+    } else if (profilesRes && Array.isArray(profilesRes.profiles)) {
+      profilesRes.profiles.forEach(p => addCandidate(p.user_name || p.name));
     }
+    if (leaderboardRes && Array.isArray(leaderboardRes.leaderboard)) {
+      leaderboardRes.leaderboard.forEach(p => addCandidate(p.user_name || p.name));
+    }
+    Object.keys(historyByUser).forEach(u => addCandidate(u));
 
+    const profilesToFetch = Array.from(candidateSet);
     const rows = [];
 
-    for (const dKey of targetDates) {
-      for (const [userName, userDays] of Object.entries(historyByUser)) {
-        const dayRecord = userDays[dKey];
-        if (!dayRecord || !dayRecord.isReal) continue;
+    // Fetch trades + session state for each profile and compute strictly current-day metrics
+    const perProfileResults = await Promise.all(
+      profilesToFetch.map(async (userName) => {
+        try {
+          const [tradesRes, sessionRes] = await Promise.all([
+            apiFetch(`/api/paper/trades?user=${encodeURIComponent(userName)}&limit=10000`, {}, 25000).catch(() => null),
+            apiFetch(`/api/paper/session/state?user=${encodeURIComponent(userName)}`, {}, 20000).catch(() => null)
+          ]);
 
-        const pnl = Number(dayRecord.totalPnl !== undefined ? dayRecord.totalPnl : profAccount.total_pnl) || 0;
-        const profAccount = profileCaches[userName]?.account || {};
-        const openPos = Number(dayRecord.openPositionsCount !== undefined ? dayRecord.openPositionsCount : (profileCaches[userName]?.positions?.length || 0));
+          const rawClosedTrades = tradesRes && Array.isArray(tradesRes.trades) ? tradesRes.trades : [];
+          const rawOpenPositions = sessionRes && Array.isArray(sessionRes.active_positions) ? sessionRes.active_positions : [];
 
-        const charges = Number(
-          dayRecord.charges !== undefined && dayRecord.charges > 0
-            ? dayRecord.charges
-            : (profAccount.total_charges !== undefined ? profAccount.total_charges : (profAccount.charges || 0))
-        ) || 0;
-        const netAfterCharges = pnl;
+          const { dayClosedTrades, dayOpenPositions } = filterCurrentDayTradesAndPositions(
+            rawClosedTrades,
+            rawOpenPositions,
+            dKey
+          );
 
-        let realized = 0;
-        let unrealized = 0;
+          const metrics = computeDailyMetricsFromTrades(dayClosedTrades, dayOpenPositions);
+          const profAccount = sessionRes?.account || profileCaches[userName]?.account || {};
+          const eq = Number(profAccount.account_equity || profAccount.equity || 100000);
 
-        if (profAccount.realized_pnl !== undefined && profAccount.realized_pnl !== null) {
-          realized = Number(profAccount.realized_pnl);
-        } else if (dayRecord.realizedPnl !== undefined && dayRecord.realizedPnl !== 0) {
-          realized = Number(dayRecord.realizedPnl);
+          return { userName, metrics, eq, dayOpenPositionsCount: dayOpenPositions.length };
+        } catch (err) {
+          console.warn(`[FinGroww Background] Failed fetching day metrics for ${userName}:`, err);
+          return null;
         }
+      })
+    );
 
-        if (profAccount.unrealized_pnl !== undefined && profAccount.unrealized_pnl !== null) {
-          unrealized = Number(profAccount.unrealized_pnl);
-        } else if (dayRecord.unrealizedPnl !== undefined && dayRecord.unrealizedPnl !== 0) {
-          unrealized = Number(dayRecord.unrealizedPnl);
-        }
+    for (const item of perProfileResults) {
+      if (!item) continue;
+      const { userName, metrics, eq, dayOpenPositionsCount } = item;
 
-        // Exact reconciliation: Total P&L = Realized P&L + Unrealized P&L
-        if (openPos === 0 || unrealized === 0) {
-          if (realized === 0 && pnl !== 0) {
-            realized = pnl;
-          }
-          unrealized = 0;
-        } else if (realized === 0 && unrealized !== 0 && pnl !== 0) {
-          realized = pnl - unrealized;
-        }
+      // ONLY include profiles that have actual trades or P&L on this specific day (dKey)
+      if (metrics.tradesCount === 0 && Math.abs(metrics.totalPnl) < 0.001 && Math.abs(metrics.realizedPnl) < 0.001) {
+        continue;
+      }
 
-        const eq = Number(profAccount.account_equity || dayRecord.equity || 100000);
-        const trades = Number(dayRecord.tradesCount || profAccount.total_trades || 0);
-        const wins = Number(dayRecord.winningTrades) || 0;
-        const losses = Number(dayRecord.losingTrades) || 0;
-        const winRateVal = Number(dayRecord.winRate) || 0;
+      const dayRecord = historyByUser[userName]?.[dKey] || {};
+      let notesText = `${metrics.tradesCount} trades executed`;
+      if (metrics.wins > 0 || metrics.losses > 0) {
+        notesText = `${metrics.tradesCount} trades (${metrics.wins}W / ${metrics.losses}L - ${metrics.winRate.toFixed(1)}% WR)${dayOpenPositionsCount > 0 ? ` • ${dayOpenPositionsCount} Open` : ""}`;
+      }
 
-        let notesText = `${trades} trades executed`;
-        if (wins > 0 || losses > 0) {
-          notesText = `${trades} trades (${wins}W / ${losses}L - ${winRateVal.toFixed(1)}% WR)${openPos > 0 ? ` • ${openPos} Open` : ""}`;
-        }
+      rows.push({
+        date: dayRecord.displayDate || dInfo.displayDate || dKey,
+        dateKey: dKey,
+        dayName: dayRecord.dayName || dInfo.dayName || "",
+        time: "15:30:00",
+        trader: userName,
+        totalPnl: metrics.totalPnl,
+        charges: metrics.charges,
+        netAfterCharges: metrics.totalPnl,
+        realizedPnl: metrics.realizedPnl,
+        unrealizedPnl: metrics.unrealizedPnl,
+        equity: eq,
+        tradesCount: metrics.tradesCount,
+        status: metrics.totalPnl >= 0 ? "PROFIT" : "LOSS",
+        notes: notesText
+      });
 
-        // ONLY include profiles that made any trade or booked any profit/loss
-        if (trades > 0 || pnl !== 0 || realized !== 0) {
-          rows.push({
-            date: dayRecord.displayDate || dKey,
-            dateKey: dKey,
-            dayName: dayRecord.dayName || "",
-            time: "15:30:00",
-            trader: userName,
-            totalPnl: pnl,
-            charges: charges,
-            netAfterCharges: netAfterCharges,
-            realizedPnl: realized,
-            unrealizedPnl: unrealized,
-            equity: eq,
-            tradesCount: trades,
-            status: dayRecord.status || (pnl >= 0 ? "PROFIT" : "LOSS"),
-            notes: notesText
-          });
-        }
+      // Keep local dailyPnlHistory aligned with exact current-day metrics
+      if (dKey === todayKey) {
+        if (!dailyPnlHistory.byUser) dailyPnlHistory.byUser = {};
+        if (!dailyPnlHistory.byUser[userName]) dailyPnlHistory.byUser[userName] = {};
+        dailyPnlHistory.byUser[userName][dKey] = {
+          ...(dailyPnlHistory.byUser[userName][dKey] || {}),
+          date: dKey,
+          displayDate: dInfo.displayDate,
+          dayName: dInfo.dayName,
+          totalPnl: metrics.totalPnl,
+          charges: metrics.charges,
+          netAfterCharges: metrics.totalPnl,
+          realizedPnl: metrics.realizedPnl,
+          unrealizedPnl: metrics.unrealizedPnl,
+          equity: eq,
+          status: dayRecord.status || "RUNNING",
+          tradesCount: metrics.tradesCount,
+          winningTrades: metrics.wins,
+          losingTrades: metrics.losses,
+          winRate: metrics.winRate,
+          openPositionsCount: dayOpenPositionsCount,
+          isReal: true,
+          timestamp: Date.now()
+        };
       }
     }
 
     if (rows.length === 0) {
-      return { success: false, error: "No active trading profiles with trades found to sync." };
+      return { success: false, error: `No active trading profiles with trades found for ${dKey}.` };
     }
 
     const payloadStr = JSON.stringify({
@@ -1456,6 +1642,15 @@ async function triggerLiveMarketTick() {
       const account = state.account || {};
       const status = state.status || "RUNNING";
 
+      const todayMetrics = await getTodayMetricsForProfile(currentProfile, positions);
+      const initCap = Number(account.initial_capital) || 100000;
+      account.today_pnl = todayMetrics.totalPnl;
+      account.today_realized_pnl = todayMetrics.realizedPnl;
+      account.today_unrealized_pnl = todayMetrics.unrealizedPnl;
+      account.today_charges = todayMetrics.charges;
+      account.today_trades_count = todayMetrics.tradesCount;
+      account.today_return_pct = Number(((todayMetrics.totalPnl / initCap) * 100).toFixed(2));
+
       profileCaches[currentProfile] = {
         positions: positions,
         account: account,
@@ -1487,7 +1682,7 @@ async function triggerLiveMarketTick() {
       };
 
       await chrome.storage.local.set(syncPayload);
-      updateBadge(positions.length, Number(account.total_pnl) || 0, currentProfile);
+      updateBadge(positions.length, todayMetrics.totalPnl, currentProfile);
     }
   } catch (err) {
     console.warn("[FinGroww Background] Tick warning:", err);

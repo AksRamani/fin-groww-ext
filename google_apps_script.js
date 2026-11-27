@@ -611,7 +611,21 @@ function resetSheetTodayOnly() {
 
   const todayRecords = {};
 
-  // Fetch live profiles and session states dynamically from FinGroww server
+  // Helper to extract YYYY-MM-DD (IST) from trade/position timestamp
+  function extractIstDateKeyGs(val) {
+    if (!val) return "";
+    const str = String(val).trim();
+    if (/^\d{4}-\d{2}-\d{2}/.test(str) && !/^\d{4}-\d{2}-\d{2}T.*(Z|[+-]\d{2}:?\d{2})$/i.test(str)) {
+      return str.slice(0, 10);
+    }
+    const d = new Date(val);
+    if (!isNaN(d.getTime())) {
+      return Utilities.formatDate(d, "Asia/Kolkata", "yyyy-MM-dd");
+    }
+    return "";
+  }
+
+  // Fetch live profiles, trades, and session states dynamically from FinGroww server (strictly current-day metrics)
   try {
     const profRes = UrlFetchApp.fetch(
       "https://api.fingroww.tech/api/paper/profiles",
@@ -621,47 +635,77 @@ function resetSheetTodayOnly() {
       const pJson = JSON.parse(profRes.getContentText());
       (pJson.profiles || []).forEach((p) => {
         try {
-          const stRes = UrlFetchApp.fetch(
-            `https://api.fingroww.tech/api/paper/session/state?user=${encodeURIComponent(p.user_name)}`,
-            { muteHttpExceptions: true },
-          );
-          if (stRes.getResponseCode() === 200) {
-            const stJson = JSON.parse(stRes.getContentText());
-            if (stJson && stJson.account) {
-              const acc = stJson.account;
-              const trades = Number(
-                acc.total_trades ||
-                  (stJson.stats && stJson.stats.total_trades) ||
-                  p.total_trades ||
-                  0,
-              );
-              const pnl =
-                Number(
-                  acc.total_pnl !== undefined ? acc.total_pnl : p.net_pnl,
-                ) || 0;
-              const charges = Number(acc.total_charges || 0);
-              if (trades > 0 || pnl !== 0 || charges > 0) {
-                const k = normalizeTrader(p.user_name);
-                const openCount = stJson.active_positions
-                  ? stJson.active_positions.length
-                  : 0;
-                let notes = `${trades} trades (${p.winning_trades || 0}W / ${p.losing_trades || 0}L - ${(p.win_rate || 0).toFixed(1)}% WR)`;
-                if (openCount > 0) notes += ` • ${openCount} Open`;
+          const userName = p.user_name || p.name;
+          if (!userName || userName.includes("ALL USERS")) return;
 
-                todayRecords[k] = {
-                  trader: p.user_name,
-                  totalPnl: pnl,
-                  charges: charges,
-                  realized: Number(acc.realized_pnl || 0),
-                  unrealized: Number(acc.unrealized_pnl || 0),
-                  equity: Number(acc.account_equity || 100000),
-                  tradesCount: trades,
-                  status: stJson.status || p.status || "RUNNING",
-                  notes: notes,
-                  lastSynced: nowIst,
-                };
-              }
-            }
+          const [stRes, trRes] = UrlFetchApp.fetchAll([
+            {
+              url: `https://api.fingroww.tech/api/paper/session/state?user=${encodeURIComponent(userName)}`,
+              muteHttpExceptions: true,
+            },
+            {
+              url: `https://api.fingroww.tech/api/paper/trades?user=${encodeURIComponent(userName)}&limit=10000`,
+              muteHttpExceptions: true,
+            },
+          ]);
+
+          const stJson = stRes.getResponseCode() === 200 ? JSON.parse(stRes.getContentText()) : {};
+          const trJson = trRes.getResponseCode() === 200 ? JSON.parse(trRes.getContentText()) : {};
+          const acc = stJson.account || {};
+
+          const rawClosed = Array.isArray(trJson.trades) ? trJson.trades : [];
+          const rawOpen = Array.isArray(stJson.active_positions) ? stJson.active_positions : [];
+
+          const dayClosed = rawClosed.filter((t) => {
+            return extractIstDateKeyGs(t.exit_time || t.closed_at || t.entry_time) === todayKey;
+          });
+          const dayOpen = rawOpen.filter((pos) => {
+            return extractIstDateKeyGs(pos.entry_time || pos.entry_timestamp || pos.last_updated) === todayKey;
+          });
+
+          let realized = 0;
+          let closedCharges = 0;
+          let wins = 0;
+          let losses = 0;
+          dayClosed.forEach((t) => {
+            const net = Number(t.net_pnl) || 0;
+            realized += net;
+            closedCharges += Number(t.charges) || 0;
+            const isWin = t.is_win !== undefined ? Boolean(t.is_win) : net > 0;
+            if (isWin) wins++;
+            else if (net < 0) losses++;
+          });
+
+          let unrealized = 0;
+          let openCharges = 0;
+          dayOpen.forEach((pos) => {
+            unrealized += Number(pos.unrealized_pnl) || 0;
+            openCharges += Number(pos.total_charges || pos.entry_charges) || 0;
+          });
+
+          const pnl = Number((realized + unrealized).toFixed(2));
+          const charges = Number((closedCharges + openCharges).toFixed(2));
+          const trades = dayClosed.length + dayOpen.length;
+
+          if (trades > 0 || Math.abs(pnl) > 0.001) {
+            const k = normalizeTrader(userName);
+            const openCount = dayOpen.length;
+            const wr = wins + losses > 0 ? (wins / (wins + losses)) * 100 : 0;
+            let notes = `${trades} trades (${wins}W / ${losses}L - ${wr.toFixed(1)}% WR)`;
+            if (openCount > 0) notes += ` • ${openCount} Open`;
+
+            todayRecords[k] = {
+              trader: userName,
+              totalPnl: pnl,
+              charges: charges,
+              realized: Number(realized.toFixed(2)),
+              unrealized: Number(unrealized.toFixed(2)),
+              equity: Number(acc.account_equity || 100000),
+              tradesCount: trades,
+              status: stJson.status || p.status || "RUNNING",
+              notes: notes,
+              lastSynced: nowIst,
+            };
           }
         } catch (e) {}
       });

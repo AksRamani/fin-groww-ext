@@ -1313,7 +1313,7 @@
           </select>
         </div>
 
-        <div class="fg-pnl-badge fg-pnl-neutral" id="fg-pnl-badge" title="Overall P&L (Click to open Drawer Table)">
+        <div class="fg-pnl-badge fg-pnl-neutral" id="fg-pnl-badge" title="Today's P&L (Click to open Drawer Table)">
           <span id="fg-pnl-icon">📈</span>
           <span id="fg-pnl-val">P&L: ₹0.00</span>
           <span id="fg-pnl-pct" style="font-size:11px;opacity:0.85;">(0.00%)</span>
@@ -2001,8 +2001,8 @@
     const restorePnl = shadowRoot.getElementById("fg-restore-pnl");
 
     const entry = (leaderboardData || []).find((p) => (p.user_name || p.name) === currentProfile);
-    const totalPnl = Number(accountData?.total_pnl !== undefined ? accountData.total_pnl : (entry?.net_pnl !== undefined ? entry.net_pnl : (entry?.total_pnl !== undefined ? entry.total_pnl : 0))) || 0;
-    const retPct = Number(accountData?.overall_return_pct !== undefined ? accountData.overall_return_pct : (entry?.roi_pct !== undefined ? entry.roi_pct : 0)) || 0;
+    const totalPnl = Number(accountData?.today_pnl !== undefined ? accountData.today_pnl : (accountData?.total_pnl !== undefined ? accountData.total_pnl : (entry?.net_pnl !== undefined ? entry.net_pnl : (entry?.total_pnl !== undefined ? entry.total_pnl : 0)))) || 0;
+    const retPct = Number(accountData?.today_return_pct !== undefined ? accountData.today_return_pct : (accountData?.overall_return_pct !== undefined ? accountData.overall_return_pct : (entry?.roi_pct !== undefined ? entry.roi_pct : 0))) || 0;
 
     pnlVal.textContent = `P&L: ${formatInr(totalPnl)}`;
     pnlPct.textContent = `(${formatPct(retPct)})`;

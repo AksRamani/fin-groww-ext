@@ -915,6 +915,102 @@ function triggerBrowserDownload(csvText, filename) {
   URL.revokeObjectURL(url);
 }
 
+// IST Date helpers for strict current-day filtering (prevents multi-day carryforward data in CSV/Sheet)
+function getIstDateInfoPopup(d = new Date()) {
+  try {
+    const dateKey = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Kolkata",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(d);
+    const displayDate = new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Asia/Kolkata",
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    }).format(d);
+    const dayName = new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Asia/Kolkata",
+      weekday: "short",
+    }).format(d);
+    return { dateKey, displayDate, dayName };
+  } catch (e) {
+    const iso = d.toISOString().slice(0, 10);
+    return { dateKey: iso, displayDate: iso, dayName: "" };
+  }
+}
+
+function getIstDateKeyFromValuePopup(val) {
+  if (val === undefined || val === null || val === "") return "";
+  if (typeof val === "number") {
+    const ms = val < 1e12 ? val * 1000 : val;
+    const d = new Date(ms);
+    if (!isNaN(d.getTime())) return getIstDateInfoPopup(d).dateKey;
+    return "";
+  }
+  const str = String(val).trim();
+  if (!str) return "";
+  if (/^\d{4}-\d{2}-\d{2}T.*(Z|[+-]\d{2}:?\d{2})$/i.test(str)) {
+    const d = new Date(str);
+    if (!isNaN(d.getTime())) return getIstDateInfoPopup(d).dateKey;
+  }
+  const isoMatch = str.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (isoMatch) return isoMatch[1];
+  const dmyMatch = str.match(/^(\d{2})[-/](\d{2})[-/](\d{4})/);
+  if (dmyMatch) return `${dmyMatch[3]}-${dmyMatch[2]}-${dmyMatch[1]}`;
+  const parsed = new Date(str);
+  if (!isNaN(parsed.getTime())) return getIstDateInfoPopup(parsed).dateKey;
+  return "";
+}
+
+function filterCurrentDayTradesPopup(closedTrades = [], openPositions = [], targetDateKey = getIstDateInfoPopup().dateKey) {
+  const dayClosedTrades = (Array.isArray(closedTrades) ? closedTrades : []).filter((t) => {
+    const dKey = getIstDateKeyFromValuePopup(t.exit_time || t.closed_at || t.entry_time || t.market_data_timestamp);
+    return dKey === targetDateKey;
+  });
+  const dayOpenPositions = (Array.isArray(openPositions) ? openPositions : []).filter((pos) => {
+    const dKey = getIstDateKeyFromValuePopup(pos.entry_time || pos.entry_timestamp || pos.last_updated);
+    return dKey === targetDateKey;
+  });
+  return { dayClosedTrades, dayOpenPositions };
+}
+
+function computeDailyMetricsPopup(dayClosedTrades = [], dayOpenPositions = []) {
+  let realizedPnl = 0;
+  let closedCharges = 0;
+  let wins = 0;
+  let losses = 0;
+  for (const t of dayClosedTrades) {
+    const net = Number(t.net_pnl) || 0;
+    realizedPnl += net;
+    closedCharges += Number(t.charges) || 0;
+    const isWin = t.is_win !== undefined ? Boolean(t.is_win) : net > 0;
+    if (isWin) wins++;
+    else if (net < 0) losses++;
+  }
+  let unrealizedPnl = 0;
+  let openCharges = 0;
+  for (const pos of dayOpenPositions) {
+    unrealizedPnl += Number(pos.unrealized_pnl) || 0;
+    openCharges += Number(pos.total_charges || pos.entry_charges) || 0;
+  }
+  const charges = closedCharges + openCharges;
+  const totalPnl = realizedPnl + unrealizedPnl;
+  const tradesCount = dayClosedTrades.length + dayOpenPositions.length;
+  const winRate = wins + losses > 0 ? (wins / (wins + losses)) * 100 : 0;
+  return {
+    totalPnl: Number(totalPnl.toFixed(2)),
+    realizedPnl: Number(realizedPnl.toFixed(2)),
+    unrealizedPnl: Number(unrealizedPnl.toFixed(2)),
+    charges: Number(charges.toFixed(2)),
+    tradesCount,
+    wins,
+    losses,
+    winRate,
+  };
+}
+
 // Direct client fetch fallback to export trades CSV if background worker is asleep
 async function directFetchAndExportCsv(targetProfile) {
   const alertBox = document.getElementById("tradesExportAlertMsg");
@@ -940,23 +1036,25 @@ async function directFetchAndExportCsv(targetProfile) {
     } catch (e) {}
   }
 
-  const closedTrades =
+  const { dateKey: todayIso } = getIstDateInfoPopup();
+  const rawClosedTrades =
     tradesData && Array.isArray(tradesData.trades) ? tradesData.trades : [];
-  const openPositions =
+  const rawOpenPositions =
     sessionData && Array.isArray(sessionData.active_positions)
       ? sessionData.active_positions
       : [];
 
+  const { dayClosedTrades: closedTrades, dayOpenPositions: openPositions } =
+    filterCurrentDayTradesPopup(rawClosedTrades, rawOpenPositions, todayIso);
+
   if (closedTrades.length === 0 && openPositions.length === 0) {
     if (alertBox) {
       alertBox.className = "trades-export-msg error";
-      alertBox.textContent = `No trade records found for "${targetProfile}".`;
+      alertBox.textContent = `No trade records found for "${targetProfile}" on ${todayIso}.`;
       alertBox.style.display = "block";
     }
     return;
   }
-
-  const todayIso = new Date().toISOString().slice(0, 10);
   const headers = [
     "Trade ID",
     "Trader Profile",
@@ -1483,120 +1581,88 @@ function setupGsheetSyncControls() {
       );
     }
 
+    const { dateKey: todayKey, displayDate: todayDisplayDate, dayName: todayDayName } = getIstDateInfoPopup();
     const cleanHistory = filterRealHistory(cachedDailyHistory);
     const historyByUser = cleanHistory?.byUser || {};
-    const allDates = Array.from(
-      new Set(Object.values(historyByUser).flatMap((u) => Object.keys(u))),
-    ).sort((a, b) => a.localeCompare(b));
 
-    // Fetch live session states and real broker charges & P&L for all profiles
+    // Collect all candidate active profiles (profiles cache + leaderboard + history)
+    const candidateSet = new Set(Object.keys(historyByUser).filter((u) => !u.includes("ALL USERS")));
+    (cachedProfiles || []).forEach((p) => {
+      const u = typeof p === "string" ? p : p.user_name;
+      if (u && !u.includes("ALL USERS")) candidateSet.add(u);
+    });
+    (cachedLeaderboard || []).forEach((p) => {
+      const u = p.user_name || p.name;
+      if (u && !u.includes("ALL USERS")) candidateSet.add(u);
+    });
+
     const hosts = API_HOSTS;
-    const activeUsers = Object.keys(historyByUser).filter((u) => !u.includes("ALL USERS"));
-    const profileSessionMap = {};
+    const activeUsers = Array.from(candidateSet);
+    const rows = [];
 
-    await Promise.all(
-      activeUsers.map(async (u) => {
+    // Fetch trades + session state per profile and compute strictly current-day (todayKey) metrics
+    const perProfileResults = await Promise.all(
+      activeUsers.map(async (userName) => {
+        let tradesData = null;
+        let sessionData = null;
         for (const h of hosts) {
           try {
-            const res = await fetch(`${h}/api/paper/session/state?user=${encodeURIComponent(u)}`);
-            if (res.ok) {
-              const data = await res.json();
-              if (data && data.account) {
-                profileSessionMap[u] = data;
-              }
+            const [tRes, sRes] = await Promise.all([
+              fetch(`${h}/api/paper/trades?user=${encodeURIComponent(userName)}&limit=10000`).then((r) => (r.ok ? r.json() : null)),
+              fetch(`${h}/api/paper/session/state?user=${encodeURIComponent(userName)}`).then((r) => (r.ok ? r.json() : null)),
+            ]);
+            if (tRes || sRes) {
+              tradesData = tRes;
+              sessionData = sRes;
               break;
             }
           } catch (e) {}
         }
+
+        const rawClosedTrades = tradesData && Array.isArray(tradesData.trades) ? tradesData.trades : [];
+        const rawOpenPositions = sessionData && Array.isArray(sessionData.active_positions) ? sessionData.active_positions : [];
+        const { dayClosedTrades, dayOpenPositions } = filterCurrentDayTradesPopup(rawClosedTrades, rawOpenPositions, todayKey);
+        const metrics = computeDailyMetricsPopup(dayClosedTrades, dayOpenPositions);
+        const profAccount = sessionData?.account || {};
+        const eq = Number(profAccount.account_equity || profAccount.equity || 100000);
+        return { userName, metrics, eq, dayOpenPositionsCount: dayOpenPositions.length };
       }),
     );
 
-    const rows = [];
-    for (const dKey of allDates) {
-      for (const [userName, userDays] of Object.entries(historyByUser)) {
-        const dayRecord = userDays[dKey];
-        if (!dayRecord || dayRecord.isReal === false) continue;
+    for (const item of perProfileResults) {
+      if (!item) continue;
+      const { userName, metrics, eq, dayOpenPositionsCount } = item;
 
-        const profData = profileSessionMap[userName] || {};
-        const profAccount = profData.account || {};
-        const openPos = Number(
-          profData.active_positions
-            ? profData.active_positions.length
-            : (dayRecord.openPositionsCount || 0),
-        );
-
-        const pnl = Number(dayRecord.totalPnl !== undefined ? dayRecord.totalPnl : (profAccount.total_pnl || 0)) || 0;
-        const charges = Number(
-          profAccount.total_charges !== undefined
-            ? profAccount.total_charges
-            : (dayRecord.charges !== undefined && dayRecord.charges > 0
-                ? dayRecord.charges
-                : (cachedAccount?.user_name === userName ? (cachedAccount?.total_charges || 0) : 0)),
-        ) || 0;
-        const netAfterCharges = pnl;
-
-        let realized = 0;
-        let unrealized = 0;
-
-        if (profAccount.realized_pnl !== undefined && profAccount.realized_pnl !== null) {
-          realized = Number(profAccount.realized_pnl);
-        } else if (dayRecord.realizedPnl !== undefined && dayRecord.realizedPnl !== 0) {
-          realized = Number(dayRecord.realizedPnl);
-        }
-
-        if (profAccount.unrealized_pnl !== undefined && profAccount.unrealized_pnl !== null) {
-          unrealized = Number(profAccount.unrealized_pnl);
-        } else if (dayRecord.unrealizedPnl !== undefined && dayRecord.unrealizedPnl !== 0) {
-          unrealized = Number(dayRecord.unrealizedPnl);
-        }
-
-        // Exact accounting reconciliation: Total P&L = Realized P&L + Unrealized P&L
-        if (openPos === 0 || unrealized === 0) {
-          if (realized === 0 && pnl !== 0) {
-            realized = pnl;
-          }
-          unrealized = 0;
-        } else if (realized === 0 && unrealized !== 0 && pnl !== 0) {
-          realized = pnl - unrealized;
-        }
-
-        const eq = Number(profAccount.account_equity || dayRecord.equity || 100000);
-        const trades = Number(dayRecord.tradesCount || profAccount.total_trades || 0);
-        const wins = Number(dayRecord.winningTrades) || 0;
-        const losses = Number(dayRecord.losingTrades) || 0;
-        const wr =
-          Number(dayRecord.winRate) ||
-          (wins + losses > 0 ? (wins / (wins + losses)) * 100 : 0);
-
-        let notesText = `${trades} trades executed`;
-        if (wins > 0 || losses > 0) {
-          notesText = `${trades} trades (${wins}W / ${losses}L - ${wr.toFixed(1)}% WR)${openPos > 0 ? ` • ${openPos} Open` : ""}`;
-        }
-
-        // ONLY include profiles that made any trade or booked any profit/loss
-        if (trades > 0 || pnl !== 0 || realized !== 0) {
-          rows.push({
-            date: dayRecord.displayDate || dKey,
-            dateKey: dKey,
-            dayName: dayRecord.dayName || "",
-            time: "15:30:00",
-            trader: userName,
-            totalPnl: pnl,
-            charges: charges,
-            netAfterCharges: netAfterCharges,
-            realizedPnl: realized,
-            unrealizedPnl: unrealized,
-            equity: eq,
-            tradesCount: trades,
-            status: dayRecord.status || (pnl >= 0 ? "PROFIT" : "LOSS"),
-            notes: notesText,
-          });
-        }
+      // ONLY include profiles that have actual trades or P&L today
+      if (metrics.tradesCount === 0 && Math.abs(metrics.totalPnl) < 0.001 && Math.abs(metrics.realizedPnl) < 0.001) {
+        continue;
       }
+
+      let notesText = `${metrics.tradesCount} trades executed`;
+      if (metrics.wins > 0 || metrics.losses > 0) {
+        notesText = `${metrics.tradesCount} trades (${metrics.wins}W / ${metrics.losses}L - ${metrics.winRate.toFixed(1)}% WR)${dayOpenPositionsCount > 0 ? ` • ${dayOpenPositionsCount} Open` : ""}`;
+      }
+
+      rows.push({
+        date: todayDisplayDate || todayKey,
+        dateKey: todayKey,
+        dayName: todayDayName || "",
+        time: "15:30:00",
+        trader: userName,
+        totalPnl: metrics.totalPnl,
+        charges: metrics.charges,
+        netAfterCharges: metrics.totalPnl,
+        realizedPnl: metrics.realizedPnl,
+        unrealizedPnl: metrics.unrealizedPnl,
+        equity: eq,
+        tradesCount: metrics.tradesCount,
+        status: metrics.totalPnl >= 0 ? "PROFIT" : "LOSS",
+        notes: notesText,
+      });
     }
 
     if (rows.length === 0) {
-      throw new Error("No active profile records found to sync today");
+      throw new Error(`No active profile records found to sync for ${todayKey}`);
     }
 
     const payload = JSON.stringify({
@@ -1628,9 +1694,8 @@ function setupGsheetSyncControls() {
       });
     }
 
-    const todayIso = new Date().toISOString().slice(0, 10);
     await chrome.storage.local.set({
-      fg_gsheet_last_sync_date: todayIso,
+      fg_gsheet_last_sync_date: todayKey,
       fg_gsheet_last_sync_time: Date.now(),
       fg_gsheet_last_sync_status: "SUCCESS",
       fg_gsheet_last_sync_msg: `Synced ${rows.length} rows to Google Sheet`,
