@@ -472,18 +472,26 @@ body {
 
 .strip-value {
   font-family: var(--font-mono);
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 800;
   letter-spacing: -0.2px;
   color: var(--text-main);
   white-space: nowrap;
 }
 
+.strip-sub {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-top: 2px;
+  white-space: nowrap;
+}
+
 .financial-strip-divider {
   width: 1px;
-  height: 24px;
+  height: 28px;
   background: var(--border-subtle);
-  margin: 0 12px;
+  margin: 0 8px;
 }
 
 /* ========================================================

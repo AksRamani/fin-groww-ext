@@ -150,10 +150,27 @@ function updatePopupUi(payload) {
     rankBadge.title = `${currentProfile} is ${st} (not in running competition)`;
   }
 
-  // 3. Overall Net P&L & Virtual Equity
+  // 3. Today's P&L, Overall Total P&L & Virtual Equity
   const acc = cachedAccount || {};
   const totalPnl = Number(acc.total_pnl !== undefined ? acc.total_pnl : (entry?.net_pnl !== undefined ? entry.net_pnl : (entry?.total_pnl !== undefined ? entry.total_pnl : 0))) || 0;
   const retPct = Number(acc.overall_return_pct !== undefined ? acc.overall_return_pct : (entry?.roi_pct !== undefined ? entry.roi_pct : 0)) || 0;
+
+  const todayPnl = Number(acc.today_pnl !== undefined ? acc.today_pnl : totalPnl) || 0;
+  const todayRetPct = Number(acc.today_return_pct !== undefined ? acc.today_return_pct : retPct) || 0;
+
+  const todayPnlEl = document.getElementById("todayPnl");
+  const todayRetEl = document.getElementById("todayReturnPct");
+  if (todayPnlEl) {
+    todayPnlEl.textContent = (todayPnl > 0 ? "+" : "") + formatInr(todayPnl);
+    todayPnlEl.className =
+      "kpi-val " + (todayPnl > 0 ? "val-green" : todayPnl < 0 ? "val-red" : "");
+  }
+  if (todayRetEl) {
+    todayRetEl.textContent = `${todayRetPct >= 0 ? "+" : ""}${todayRetPct.toFixed(2)}% Today`;
+    todayRetEl.style.color =
+      todayRetPct > 0 ? "var(--green)" : todayRetPct < 0 ? "var(--red)" : "var(--text-dim)";
+  }
+
   const pnlEl = document.getElementById("totalPnl");
   const retEl = document.getElementById("returnPct");
 
@@ -168,7 +185,7 @@ function updatePopupUi(payload) {
     realized = totalPnl;
   }
 
-  retEl.textContent = `${retPct >= 0 ? "+" : ""}${retPct.toFixed(2)}% Overall Return`;
+  retEl.textContent = `${retPct >= 0 ? "+" : ""}${retPct.toFixed(2)}% Overall`;
   retEl.style.color =
     retPct > 0 ? "var(--green)" : retPct < 0 ? "var(--red)" : "var(--text-dim)";
 
@@ -188,7 +205,7 @@ function updatePopupUi(payload) {
     acc.account_equity || entry?.equity || entry?.account_equity || 100000,
   );
   document.getElementById("availableBal").textContent =
-    `Balance: ${formatInr(acc.available_balance || (entry?.equity || entry?.account_equity || 100000) - (acc.used_margin || 0))}`;
+    `Bal: ${formatInr(acc.available_balance || (entry?.equity || entry?.account_equity || 100000) - (acc.used_margin || 0))}`;
 
   // Update Trade Details CSV badge
   const tradesBadge = document.getElementById("tradesExportCountBadge");
@@ -1892,22 +1909,42 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   }
 
-  // Directly fetch session data for selected profile from server
+  // Directly fetch session data + today's trades for selected profile from server
   async function fetchAndApplyProfileSession(profileName) {
     if (!profileName) return;
     const hosts = API_HOSTS;
     for (const host of hosts) {
       try {
-        const res = await fetch(
-          `${host}/api/paper/session/state?user=${encodeURIComponent(profileName)}`
-        );
+        const [res, tRes] = await Promise.all([
+          fetch(`${host}/api/paper/session/state?user=${encodeURIComponent(profileName)}`),
+          fetch(`${host}/api/paper/trades?user=${encodeURIComponent(profileName)}&limit=10000`).catch(() => null),
+        ]);
         if (res.ok) {
           const data = await res.json();
+          const tData = tRes && tRes.ok ? await tRes.json().catch(() => null) : null;
           if (currentProfile === profileName) {
+            const acc = data.account || {};
+            const positions = data.active_positions || [];
+            if (tData && Array.isArray(tData.trades)) {
+              const { dateKey: todayKey } = getIstDateInfoPopup();
+              const { dayClosedTrades, dayOpenPositions } = filterCurrentDayTradesPopup(
+                tData.trades,
+                positions,
+                todayKey,
+              );
+              const metrics = computeDailyMetricsPopup(dayClosedTrades, dayOpenPositions);
+              const initCap = Number(acc.initial_capital) || 100000;
+              acc.today_pnl = metrics.totalPnl;
+              acc.today_realized_pnl = metrics.realizedPnl;
+              acc.today_unrealized_pnl = metrics.unrealizedPnl;
+              acc.today_charges = metrics.charges;
+              acc.today_trades_count = metrics.tradesCount;
+              acc.today_return_pct = Number(((metrics.totalPnl / initCap) * 100).toFixed(2));
+            }
             updatePopupUi({
               profile: profileName,
-              account: data.account || {},
-              positions: data.active_positions || [],
+              account: acc,
+              positions: positions,
               status: data.status || "RUNNING",
               leaderboard: cachedLeaderboard,
               profiles: cachedProfiles,
